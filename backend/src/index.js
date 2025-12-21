@@ -26,7 +26,7 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:8081',
-    'https://kolier-hotel-back.onrender.com'
+    'https://kolier-hotels-web.onrender.com'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
