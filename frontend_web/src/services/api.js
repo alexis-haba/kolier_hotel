@@ -7,68 +7,50 @@ const api = axios.create({
   baseURL: `${apiUrl}/api`,
 });
 
-// ================== REQUEST ==================
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log(
-        '➡️ Requête envoyée:',
-        config.method?.toUpperCase(),
-        config.url
-      );
+      console.log('Requête envoyée avec URL:', config.url, 'Token:', token);
     }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// ================== RESPONSE ==================
 api.interceptors.response.use(
   (response) => {
     console.log(
-      '✅ Réponse:',
+      'Réponse reçue pour URL:',
       response.config.url,
       'Status:',
-      response.status
+      response.status,
+      'Data:',
+      response.data
     );
     return response;
   },
   (error) => {
-    const status = error.response?.status;
-    const code = error.response?.data?.code;
-
-    // 🔴 CAS 1 : ABONNEMENT TERMINÉ (table users renommée)
-    if (status === 403 && code === "SUBSCRIPTION_ENDED") {
-      console.warn("🚫 Abonnement terminé – redirection forcée");
-
-      localStorage.clear();
-      window.location.href = "/subscription-ended";
-      return Promise.reject(error);
-    }
-
-    // 🔐 CAS 2 : TOKEN INVALIDE / EXPIRÉ
-    if (status === 401) {
-      console.warn("🔑 Session expirée – retour login");
-
+    if (error.response && error.response.status === 401) {
+      console.log(
+        'Erreur 401 détectée pour URL:',
+        error.config.url,
+        'Détails:',
+        error.response.data
+      );
       localStorage.removeItem('token');
-      window.location.href = "/login";
-      return Promise.reject(error);
+      window.location.href = '/login';
+    } else {
+      console.error(
+        'Erreur non 401:',
+        error.message,
+        'Config:',
+        error.config,
+        'Response:',
+        error.response
+      );
     }
-
-    // ❌ AUTRES ERREURS
-    console.error(
-      '❌ Erreur API:',
-      error.message,
-      'URL:',
-      error.config?.url,
-      'Status:',
-      status,
-      'Data:',
-      error.response?.data
-    );
-
     return Promise.reject(error);
   }
 );
