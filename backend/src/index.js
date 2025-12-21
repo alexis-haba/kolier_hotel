@@ -1,5 +1,5 @@
 // backend/src/index.js
-require('dotenv').config();
+require('dotenv').config(); 
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -16,34 +16,23 @@ const Tariff = require('./models/Tariff');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// === Security middlewares ===
+// Security middlewares
 app.use(helmet());
+app.use(cors({ origin: [
+  'http://localhost:3000',
+  'http://localhost:8081',
+  'https://vibes-hotel-web.onrender.com' // ton site déployé
+
+] })); // Web et mobile
 app.use(xss());
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 }));
-
-// === CORS Configuration ===
-app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:8081',
-    'https://kolier-hotels-web.onrender.com'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
-
-// Preflight requests pour toutes les routes
-app.options('*', cors());
-
-// === Body parser ===
+// Body parser
 app.use(express.json());
 
-// === Connect to MongoDB ===
-// Ton URL MongoDB doit être dans .env avec MONGO_URI
+// Connect to MongoDB
 connectDB();
 
-// === Routes ===
+// Routes existantes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/rooms', require('./routes/roomRoutes'));
 app.use('/api/stays', require('./routes/stayRoutes'));
@@ -52,18 +41,20 @@ app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/audit', require('./routes/auditRoutes'));
 app.use('/api/tariffs', require('./routes/tariffRoutes'));
-app.use('/api/entries', require('./routes/entryRoutes'));
-app.use('/api/user-report', require('./routes/userReportRoutes'));
+app.use('/api/entries', require('./routes/entryRoutes'));  
+app.use('/api/user-report', require('./routes/userReportRoutes')); // ✅ nouvelle route user
+
+// 🔹 Routes pour les résidences
 app.use('/api/residences', require('./routes/residenceRoutes'));
 
-// === Swagger API docs ===
+// Swagger API docs
 const swaggerDocument = yaml.load(path.join(__dirname, 'swagger.yaml'));
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// === Start server ===
+// Start server
 app.listen(PORT, () => console.log(`Serveur lancé sur le port ${PORT}`));
 
-// === Initialiser un tarif par défaut si aucun n'existe ===
+// Initialiser un tarif par défaut si aucun n'existe
 const initializeDefaultTariff = async () => {
   const existingTariff = await Tariff.findOne();
   if (!existingTariff) {
