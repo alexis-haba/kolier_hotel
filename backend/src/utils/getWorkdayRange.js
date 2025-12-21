@@ -19,4 +19,28 @@ function getWorkdayRange(refDate = new Date()) {
   return { start, end };
 }
 
+const Entry = require("../models/DailyEntry");
+
+module.exports = async function calculateIncome(stays, start, end) {
+  const hourIncome = stays
+    .filter(s => s.phase === "hour")
+    .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+  const nightIncome = stays
+    .filter(s => s.phase === "night")
+    .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+  const entries = await Entry.find({
+    date: { $gte: start, $lt: end }
+  });
+
+  const entriesIncome = entries.reduce(
+    (sum, e) => sum + (e.totalIncome || 0),
+    0
+  );
+
+  return hourIncome + nightIncome + entriesIncome;
+};
+
+
 module.exports = getWorkdayRange;

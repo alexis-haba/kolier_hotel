@@ -8,6 +8,7 @@ import Settings from './components/Settings';
 import AuditLog from './components/AuditLog';
 import DayEntry from './components/DayEntry';
 import NightEntry from './components/NightEntry';
+import ResidencesList from './components/ResidencesList';
 import api from './services/api';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -22,13 +23,14 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
         .then((res) => {
           setIsAuthenticated(true);
           setUserRole(res.data.role);
+
           if (!allowedRoles.includes(res.data.role)) {
             navigate('/unauthorized');
           }
         })
         .catch((err) => {
           console.error('Erreur /auth/me:', err);
-          // Fallback : Utilise le rôle du token décodé si /auth/me échoue
+
           const payload = JSON.parse(atob(token.split('.')[1]));
           if (payload && payload.role && allowedRoles.includes(payload.role)) {
             setIsAuthenticated(true);
@@ -55,6 +57,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('currentResidence');
     setIsAuthenticated(false);
     window.location.href = '/login';
   };
@@ -67,30 +70,26 @@ function App() {
             <a className="navbar-brand" href="/">The Vibes Admin</a>
             <div className="collapse navbar-collapse">
               <ul className="navbar-nav me-auto">
-                <li className="nav-item">
-                  <a className="nav-link" href="/">Dashboard</a>
-                </li>
-                <li className="nav-item">
-                  <a className="nav-link" href="/rooms">Chambres</a>
-                </li>
-                <li className="nav-item">
-                  <a className="nav-link" href="/users">Utilisateurs</a>
-                </li>
-                <li className="nav-item">
-                  <a className="nav-link" href="/settings">Paramètres</a>
-                </li>
-                <li className="nav-item">
-                  <a className="nav-link" href="/audit">Historique</a>
-                </li>
+                <li className="nav-item"><a className="nav-link" href="/">Dashboard</a></li>
+                <li className="nav-item"><a className="nav-link" href="/rooms">Chambres</a></li>
+                <li className="nav-item"><a className="nav-link" href="/users">Utilisateurs</a></li>
+                <li className="nav-item"><a className="nav-link" href="/settings">Paramètres</a></li>
+                <li className="nav-item"><a className="nav-link" href="/audit">Historique</a></li>
               </ul>
               <button onClick={handleLogout} className="btn btn-outline-danger">Déconnexion</button>
             </div>
-            
           </div>
         </nav>
       )}
+
       <Routes>
-        <Route path="/login" element={<Login setIsAuthenticated={setIsAuthenticated} />} />
+        {/* LOGIN avec redirection automatique */}
+        <Route
+          path="/login"
+          element={<Login setIsAuthenticated={setIsAuthenticated} />}
+        />
+
+        {/* Dashboard */}
         <Route
           path="/"
           element={
@@ -99,6 +98,18 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Résidences */}
+        <Route
+          path="/residences"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <ResidencesList />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Pages employé */}
         <Route
           path="/day-entry"
           element={
@@ -115,6 +126,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Pages admin */}
         <Route
           path="/rooms"
           element={
@@ -147,6 +160,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route path="/unauthorized" element={<div className="p-4">Accès non autorisé</div>} />
       </Routes>
     </Router>

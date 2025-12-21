@@ -16,22 +16,35 @@ exports.register = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
-  const { username, password } = req.body;
-  const user = await User.findOne({ username });
-  if (!user || !await bcrypt.compare(password, user.password)) {
-    return res.status(401).json({ msg: 'Invalid credentials' });
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ msg: "Champs requis" });
+    }
+
+    // ⚠️ select('+password') est obligatoire ici
+    const user = await User.findOne({ username }).select('+password');
+    if (!user) {
+      console.log("❌ Utilisateur introuvable:", username);
+      return res.status(401).json({ msg: "Invalid credentials" });
+    }
+
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      console.log("❌ Mot de passe incorrect pour:", username);
+      return res.status(401).json({ msg: "Invalid credentials" });
+    }
+
+    const payload = { id: user._id, username: user.username, role: user.role };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" });
+
+    res.json({ token });
+  } catch (err) {
+    console.error("Erreur login:", err);
+    res.status(500).json({ msg: "Erreur serveur" });
   }
-
-  // 👇 Ajoute username ici
-  const payload = { 
-    id: user._id, 
-    username: user.username, 
-    role: user.role 
-  };
-
-  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-  res.json({ token });
 };
+
 
 

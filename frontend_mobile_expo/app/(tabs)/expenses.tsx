@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../../services/api";
@@ -24,6 +24,7 @@ type Expense = { reason: string; amount: string };
 
 export default function Expenses() {
   const [items, setItems] = useState<Expense[]>([{ reason: "", amount: "" }]);
+  const lastSaved = useRef<string>(""); // 🔹 garde en mémoire la dernière sauvegarde
 
   const add = () => setItems((p) => [...p, { reason: "", amount: "" }]);
   const rm = (i: number) => setItems((p) => p.filter((_, idx) => idx !== i));
@@ -33,22 +34,63 @@ export default function Expenses() {
   const total = items.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
 
   const save = async () => {
-    try {
-      const token = await AsyncStorage.getItem("token");
-      await api.post(
-        "/expenses",
-      { 
-          expenses: items
-            .filter((i) => i.reason.trim() && i.amount)
-            .map((i) => ({ description: i.reason.trim(), amount: Number(i.amount) }))
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      Alert.alert("Succès", "Dépenses enregistrées");
-      setItems([{ reason: "", amount: "" }]);
-    } catch {
-      Alert.alert("Erreur", "Impossible d’enregistrer");
+    const validExpenses = items
+      .filter((i) => i.reason.trim() && i.amount)
+      .map((i) => ({ description: i.reason.trim(), amount: Number(i.amount) }));
+
+    if (validExpenses.length === 0) {
+      Alert.alert("Erreur", "Veuillez saisir au moins une dépense valide.");
+      return;
     }
+
+    // 🔸 Vérifie doublons dans le même lot (local)
+    const unique = new Set(validExpenses.map((e) => `${e.description}-${e.amount}`));
+    if (unique.size !== validExpenses.length) {
+      Alert.alert("Doublon détecté", "Certaines dépenses sont identiques. Vérifiez avant d’enregistrer.");
+      return;
+    }
+
+    // 🔸 Empêche de renvoyer la même donnée deux fois
+    const currentData = JSON.stringify(validExpenses);
+    if (lastSaved.current === currentData) {
+      Alert.alert("Doublon détecté", "Ces mêmes dépenses ont déjà été enregistrées.");
+      return;
+    }
+
+    // 🔸 Confirmation avant enregistrement
+    Alert.alert(
+      "Confirmation",
+      "Voulez-vous vraiment enregistrer ces dépenses ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Oui",
+          onPress: async () => {
+            try {
+              const token = await AsyncStorage.getItem("token");
+              if (!token) {
+                Alert.alert("Erreur", "Vous devez être connecté pour enregistrer.");
+                return;
+              }
+
+              await api.post(
+                "/expenses",
+                { expenses: validExpenses },
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+
+              lastSaved.current = currentData; // ✅ garde la dernière sauvegarde
+              Alert.alert("Succès", "Dépenses enregistrées !");
+              setItems([{ reason: "", amount: "" }]);
+            } catch (err) {
+              console.error(err);
+              Alert.alert("Erreur", "Impossible d’enregistrer les dépenses.");
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   return (

@@ -31,12 +31,13 @@ exports.addRoom = async (req, res) => {
 };
 
 // 📌 Modifier une chambre
+// 📌 Modifier une chambre
 exports.editRoom = async (req, res) => {
   try {
     const { id } = req.params;
-    const { state } = req.body;
+    const { number, type, state } = req.body;
 
-    // Vérifie si l'utilisateur essaie de remettre la chambre en "free"
+    // Si on veut remettre la chambre en free, on vérifie les séjours
     if (state === "free") {
       const activeStay = await Stay.findOne({
         roomId: id,
@@ -48,7 +49,12 @@ exports.editRoom = async (req, res) => {
       }
     }
 
-    const room = await Room.findByIdAndUpdate(id, { state }, { new: true });
+    const updates = {};
+    if (number) updates.number = number;
+    if (type) updates.type = type;
+    if (state) updates.state = state;
+
+    const room = await Room.findByIdAndUpdate(id, updates, { new: true });
     if (!room) return res.status(404).json({ msg: 'Chambre non trouvée' });
 
     res.json(room);
@@ -58,6 +64,7 @@ exports.editRoom = async (req, res) => {
   }
 };
 
+
 // 📌 Supprimer une chambre
 exports.deleteRoom = async (req, res) => {
   try {
@@ -66,6 +73,6 @@ exports.deleteRoom = async (req, res) => {
     res.json({ msg: 'Chambre supprimée' });
   } catch (err) {
     console.error("Erreur deleteRoom:", err);
-    res.status(500).json({ msg: "Erreur serveur" });
+    res.status(500).json({ msg: "Erreur lors de la suppression de la chambre" });
   }
 };

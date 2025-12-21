@@ -33,7 +33,7 @@ const AuditLog = () => {
           {logs.map((log) => (
             <tr key={log._id}>
               <td>{log.action}</td>
-              <td>{log.userId.username}</td>
+              <td>{log.userId ? log.userId.username : 'Utilisateur supprimé'}</td>
               <td>{JSON.stringify(log.details)}</td>
               <td>{new Date(log.timestamp).toLocaleString()}</td>
             </tr>

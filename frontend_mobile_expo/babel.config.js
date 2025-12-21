@@ -12,10 +12,10 @@ module.exports = function(api) {
         },
       ],
       [
-        'module:react-native-dotenv',
+        "module:react-native-dotenv",
         {
-          moduleName: '@env',
-          path: '.env',
+          moduleName: "@env",
+          path: process.env.APP_ENV === "production" ? ".env.production" : ".env.local",
           safe: false,
           allowUndefined: true,
         },

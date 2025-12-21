@@ -1,10 +1,12 @@
+import 'dotenv/config';
+
 export default {
   expo: {
-    name: "TheVibesMobile",
-    slug: "thevibesmobile",
+    name: "The Vibes",
+    slug: "the vibes",
     version: "1.0.0",
     orientation: "portrait",
-    scheme: "thevibesmobile",
+    scheme: "the vibes",
     icon: "./assets/images/icon.png",
     userInterfaceStyle: "light",
     splash: {
@@ -12,36 +14,21 @@ export default {
       resizeMode: "contain",
       backgroundColor: "#ffffff",
     },
-    updates: {
-      fallbackToCacheTimeout: 0,
-    },
-    assetBundlePatterns: ["**/*"],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.cah120.thevibes"
     },
-    icon: "./assets/images/icon.png",
     android: {
+      package: "com.cah1.thevibes",   // 👈 obligatoire et unique
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",
-        backgroundColor: "#FFFFFF"
+        backgroundColor: "#FFFFFF",
       },
-      package: "com.cah120.thevibes"
     },
     extra: {
+      apiUrl: process.env.API_URL,
       eas: {
-        projectId: "7b3b741d-39df-4dca-bfaa-a0f211129dd9" // ID fourni par EAS
-      }
+        projectId: "a44993df-7ccf-4ce6-8a22-893d715767ca",
+      },
     },
-    plugins: [
-      [
-        "expo-font",
-        {
-          fonts: [
-            "./node_modules/react-native-vector-icons/Fonts/MaterialIcons.ttf",
-          ],
-        },
-      ],
-    ],
   },
 };

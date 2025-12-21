@@ -23,7 +23,8 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:8081',
-    'https://vibes-hotel-web.onrender.com' // ton site déployé
+    'https://kolier-hotels-web.onrender.com' // ton site déployé
+    // 'https://vibes-hotel-web.onrender.com' // ton site déployé
   ]
 }));
 app.use(xss());

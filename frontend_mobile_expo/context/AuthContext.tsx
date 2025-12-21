@@ -1,15 +1,16 @@
-// context/AuthContext.tsx
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {jwtDecode} from 'jwt-decode';
-import api from '../services/api'; // Assure-toi que api utilise Axios
+import {jwtDecode} from 'jwt-decode'; // <-- correction ici
+import api from '../services/api';
+import NetInfo from '@react-native-community/netinfo';
+import { Alert } from 'react-native';
 
-// Type du token décodé
+
 interface DecodedToken {
   exp: number;
   username?: string;
   role?: string;
-  [key: string]: any;
+  [key: string]: any; 
 }
 
 interface AuthContextType {
@@ -29,15 +30,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<DecodedToken | null>(null);
 
-  // -----------------------------
-  // Vérifier le token au lancement
-  // -----------------------------
   useEffect(() => {
     const checkAuth = async () => {
       const token = await AsyncStorage.getItem('token');
       if (token) {
         try {
-          const decoded = jwtDecode<DecodedToken>(token);
+          const decoded: DecodedToken = jwtDecode(token); // <-- utilise directement
           if (decoded.exp * 1000 > Date.now()) {
             setIsAuthenticated(true);
             setUser(decoded);
@@ -56,37 +54,65 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuth();
   }, []);
 
-  // -----------------------------
-  // Login
-  // -----------------------------
-  const login = async (username: string, password: string): Promise<boolean> => {
-    try {
-      const response = await api.post('/auth/login', { username, password });
-      
-      if (response.status === 200 && response.data.token) {
-        const { token } = response.data;
-        await AsyncStorage.setItem('token', token);
-        const decoded = jwtDecode<DecodedToken>(token);
-        setIsAuthenticated(true);
-        setUser(decoded);
-        return true;
-      }
+const login = async (username: string, password: string): Promise<boolean> => {
+  try {
+    console.log("[Auth] Tentative de login :", { username });
 
-      // Identifiants invalides
-      return false;
-    } catch (error: any) {
-      // L’erreur est capturée ici → plus de redbox 401 sur iPhone
+    // ✅ 1. Vérifie la connexion Internet avant la requête
+    const netInfo = await NetInfo.fetch();
+    if (!netInfo.isConnected) {
+      Alert.alert('Connexion requise', 'Aucune connexion Internet. Vérifiez votre réseau.');
+      console.warn("[Auth] Pas de connexion Internet.");
       return false;
     }
-  };
 
-  // -----------------------------
-  // Logout
-  // -----------------------------
+    // ✅ 2. Envoie la requête au serveur
+    const response = await api.post('/auth/login', { username, password });
+    console.log("[Auth] Réponse serveur :", response.status, response.data);
+
+    // ✅ 3. Si tout est OK
+    if (response.status === 200 && response.data.token) {
+      const token = response.data.token;
+      await AsyncStorage.setItem('token', token);
+
+      const decoded: DecodedToken = jwtDecode(token);
+      setIsAuthenticated(true);
+      setUser(decoded);
+
+      console.log("[Auth] Login réussi :", decoded);
+      return true;
+    }
+
+    Alert.alert('Erreur', 'Identifiants invalides.');
+    console.warn("[Auth] Identifiants invalides :", response.data);
+    return false;
+
+  } catch (err: any) {
+    console.error("[Auth] Erreur login :", {
+      message: err.message,
+      responseData: err.response?.data,
+      responseStatus: err.response?.status,
+    });
+
+    // ✅ 4. Gestion intelligente des erreurs
+    if (err.message === 'Network Error') {
+      Alert.alert('Serveur injoignable', 'Impossible de contacter le serveur. Réessayez plus tard.');
+    } else if (err.response?.status === 401) {
+      Alert.alert('Connexion échouée', 'Identifiants invalides.');
+    } else {
+      Alert.alert('Erreur', 'Un problème est survenu. Réessayez plus tard.');
+    }
+
+    return false;
+  }
+};
+
+
   const logout = async (): Promise<void> => {
     await AsyncStorage.removeItem('token');
     setIsAuthenticated(false);
     setUser(null);
+    console.log("[Auth] Logout effectué.");
   };
 
   return (
@@ -96,7 +122,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
 }
 
-// Hook pour utiliser le contexte
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');

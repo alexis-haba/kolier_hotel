@@ -7,12 +7,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -25,7 +24,7 @@ export default function LoginScreen() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace('/(tabs)/entries');
+      router.replace('/(tabs)/dashboard');
     }
   }, [isAuthenticated]);
 
@@ -49,9 +48,11 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.select({ ios: 'padding', android: undefined })}
+    <KeyboardAwareScrollView
+      contentContainerStyle={styles.container}
+      enableOnAndroid={true}
+      extraScrollHeight={30}
+      keyboardShouldPersistTaps="handled"
     >
       <Text style={styles.title}>Connexion</Text>
 
@@ -61,6 +62,7 @@ export default function LoginScreen() {
         placeholderTextColor="#aaa"
         value={username}
         onChangeText={setUsername}
+        autoCapitalize="none"
       />
 
       <View style={styles.passwordContainer}>
@@ -84,13 +86,13 @@ export default function LoginScreen() {
           <Text style={styles.loginText}>Se connecter</Text>
         )}
       </TouchableOpacity>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: '#eef2f5',
     justifyContent: 'center',
     padding: 24,
@@ -100,14 +102,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     alignSelf: 'center',
-    marginBottom: 30,
+    marginBottom: 40,
   },
   input: {
     height: 48,
     backgroundColor: '#fff',
     borderRadius: 8,
     paddingHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: '#ccc',
   },
@@ -119,7 +121,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ccc',
     paddingHorizontal: 12,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   passwordInput: {
     flex: 1,

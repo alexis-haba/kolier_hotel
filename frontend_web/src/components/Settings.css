@@ -1,0 +1,172 @@
+/* Page générale */
+.settings-page {
+  padding: 40px 20px;
+  background: linear-gradient(to bottom, #f5f7ff, #ffffff);
+  min-height: 100vh;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Titre principal */
+.settings-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+/* Card pour chaque section */
+.settings-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  padding: 30px 25px;
+  margin-bottom: 30px;
+  transition: 0.3s ease;
+}
+
+.settings-card:hover {
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+/* Sous-titres de section */
+.section-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #111827;
+}
+
+/* Formulaire */
+.form-group {
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.form-group label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 8px;
+  color: #374151;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.form-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 6px rgba(59,130,246,0.3);
+  outline: none;
+}
+
+/* Checkbox */
+.form-check {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.form-check-input {
+  margin-right: 10px;
+  width: 18px;
+  height: 18px;
+}
+
+/* Bouton sauvegarder */
+.btn-save {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-save:hover {
+  background: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37,99,235,0.4);
+}
+
+/* Liste des résidences */
+.residence-list {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 20px;
+}
+
+.residence-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+  background: #fafafa;
+}
+
+.residence-item:hover {
+  background: #f3f4f6;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+/* Bouton gérer */
+.btn-manage {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-manage:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(37,99,235,0.4);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .settings-card {
+    padding: 25px 15px;
+  }
+
+  .form-input {
+    font-size: 15px;
+  }
+
+  .btn-save {
+    width: 100%;
+  }
+}
+
+.btn-view-residences {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+}
+
+.btn-view-residences:hover {
+  background: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37,99,235,0.4);
+}

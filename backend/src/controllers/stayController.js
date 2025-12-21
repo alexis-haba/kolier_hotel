@@ -4,6 +4,9 @@ const Room = require('../models/Room');
 const Tariff = require('../models/Tariff');
 const AuditLog = require('../models/AuditLog');
 
+const getWorkdayRange = require('../utils/getWorkdayRange');
+
+
 // 📌 Ajouter un séjour
 exports.addStay = async (req, res) => {
   try {
@@ -57,19 +60,63 @@ exports.addStay = async (req, res) => {
 };
 
 // 📌 Récupérer les séjours (avec filtres par date/chambre/phase)
+
+// 📌 Modifier un séjour
+exports.updateStay = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount, paymentMethod } = req.body;
+
+    const stay = await Stay.findById(id);
+    if (!stay) return res.status(404).json({ msg: "Séjour introuvable" });
+
+    if (amount !== undefined) stay.amount = amount;
+    if (paymentMethod !== undefined) stay.paymentMethod = paymentMethod;
+
+    await stay.save();
+
+    await new AuditLog({
+      action: "update_stay",
+      userId: req.user.id,
+      details: { stayId: id, amount, paymentMethod },
+    }).save();
+
+    res.json({ msg: "Séjour mis à jour", stay });
+  } catch (err) {
+    console.error("Erreur updateStay:", err);
+    res.status(500).json({ msg: "Erreur serveur" });
+  }
+};
+
+// 📌 Supprimer un séjour
+exports.deleteStay = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const stay = await Stay.findByIdAndDelete(id);
+    if (!stay) return res.status(404).json({ msg: "Séjour introuvable" });
+
+    await new AuditLog({
+      action: "delete_stay",
+      userId: req.user.id,
+      details: { stayId: id },
+    }).save();
+
+    res.json({ msg: "Séjour supprimé avec succès" });
+  } catch (err) {
+    console.error("Erreur deleteStay:", err);
+    res.status(500).json({ msg: "Erreur serveur" });
+  }
+};
+
+
 exports.getStays = async (req, res) => {
   try {
     const { date, roomId, phase } = req.query;
     const filter = {};
 
     if (date) {
-      const start = new Date(date);
-      start.setHours(0, 0, 0, 0);
-
-      const end = new Date(date);
-      end.setHours(23, 59, 59, 999);
-
-      filter.startTime = { $gte: start, $lte: end };
+      const { start, end } = getWorkdayRange(new Date(date));
+      filter.startTime = { $gte: start, $lt: end };
     }
 
     if (roomId) filter.roomId = roomId;

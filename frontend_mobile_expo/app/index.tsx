@@ -33,7 +33,7 @@ const Header = ({ isAuthenticated, logout, router, colorScheme }: any) => {
   return (
     <View style={[styles.header, { backgroundColor: colors.background }]}>
       <MaterialCommunityIcons name="home" size={30} color={colors.tint} />
-      <Text style={[styles.logo, { color: colors.text }]}>The Vibes Résidence</Text>
+      <Text style={[styles.logo, { color: colors.text }]}>The Vibes</Text>
       {isAuthenticated ? (
         <TouchableOpacity style={styles.loginButton} onPress={handleLogout}>
           <Text style={styles.loginText}>Déconnexion</Text>

@@ -7,18 +7,16 @@
     "icon": "./assets/images/icon.png",
     "scheme": "frontendmobileexpo",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.cah120.thevibes"
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "package": "com.cah120.thevibes"
+      "edgeToEdgeEnabled": true
     },
     "web": {
       "bundler": "metro",
@@ -38,9 +36,7 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "turboModules": false,
-      "bridgeless": false
+      "typedRoutes": true
     }
-      }
+  }
 }

@@ -4,15 +4,24 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./app/*", "./components/*"]
+      "@/*": [
+        "./app/*",
+        "./components/*"
+      ]
     },
     "esModuleInterop": true,
     "jsx": "react-native",
     "moduleResolution": "node",
     "target": "esnext",
-    "lib": ["esnext"],
+    "lib": [
+      "esnext"
+    ],
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["**/*.ts", "**/*.tsx", "./declarations.d.ts"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "./declarations.d.ts"
+  ]
 }

@@ -11,13 +11,39 @@ const Login = ({ setIsAuthenticated }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+
     try {
-      console.log('Tentative de connexion avec:', { username, password });
+      // === Login ===
       const res = await api.post('/auth/login', { username, password });
-      console.log('Réponse login:', res.data);
-      localStorage.setItem('token', res.data.token);
+      const token = res.data.token;
+      localStorage.setItem('token', token);
       if (setIsAuthenticated) setIsAuthenticated(true);
-      window.location.href = '/';
+
+      // === Vérifier les résidences existantes ===
+      const resRes = await api.get('/residences', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const residences = resRes.data || [];
+
+      // === Déterminer la résidence mère (la plus ancienne) ===
+      residences.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      const residenceMere = residences[0] || null;
+
+      // === Toujours sauvegarder la résidence mère dans localStorage ===
+      if (residenceMere) {
+        localStorage.setItem("currentResidence", JSON.stringify(residenceMere));
+      } else {
+        localStorage.removeItem("currentResidence");
+      }
+
+      // === Redirection selon les règles ===
+      if (!residenceMere) {
+        window.location.href = '/';           // Dashboard si pas de résidence
+      } else {
+        window.location.href = '/residences'; // Liste des résidences
+      }
+
     } catch (err) {
       console.error('Erreur login:', err);
       if (err.response && err.response.status === 429) {
@@ -28,15 +54,14 @@ const Login = ({ setIsAuthenticated }) => {
     }
   };
 
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
+  const togglePasswordVisibility = () => setShowPassword(!showPassword);
 
   return (
     <div className="min-vh-100 d-flex align-items-center justify-content-center bg-dark text-white">
       <div className="card p-4 shadow-lg" style={{ maxWidth: '400px', width: '100%' }}>
         <div className="card-body">
           <h2 className="card-title text-center mb-4">Connexion Admin</h2>
+
           <form onSubmit={handleSubmit}>
             <div className="mb-3">
               <label htmlFor="username" className="form-label">Nom d'utilisateur</label>
@@ -50,6 +75,7 @@ const Login = ({ setIsAuthenticated }) => {
                 required
               />
             </div>
+
             <div className="mb-3">
               <label htmlFor="password" className="form-label">Mot de passe</label>
               <div className="position-relative">
@@ -77,12 +103,17 @@ const Login = ({ setIsAuthenticated }) => {
                 </span>
               </div>
             </div>
+
             {errorMessage && <div className="alert alert-danger">{errorMessage}</div>}
+
             <button type="submit" className="btn btn-primary w-100 mt-3">
               Se connecter
             </button>
           </form>
-          <p className="text-center mt-3 text-muted">The Vibes Admin - {new Date().toLocaleDateString('fr-FR')}</p>
+
+          <p className="text-center mt-3 text-muted">
+            The Vibes Admin - {new Date().toLocaleDateString('fr-FR')}
+          </p>
         </div>
       </div>
     </div>

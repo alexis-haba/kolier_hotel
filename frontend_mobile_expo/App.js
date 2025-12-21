@@ -2,29 +2,37 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import jwtDecode from 'jwt-decode';
+import { View, Text } from 'react-native';
+import * as Notifications from "expo-notifications";
+import * as ScreenCapture from 'expo-screen-capture';
 
 export default function App() {
   const router = useRouter();
-  const [initialRoute, setInitialRoute] = useState('/login'); // Par défaut sur login
+  const [initialRoute, setInitialRoute] = useState('/login');
 
+  // Autoriser l'enregistrement d'écran globalement
+  useEffect(() => {
+    ScreenCapture.allowScreenCaptureAsync();
+  }, []);
+
+  // Permissions notifications
+  useEffect(() => {
+    Notifications.requestPermissionsAsync();
+  }, []);
+
+  // Vérification de l'authentification
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const token = await AsyncStorage.getItem('token');
-        console.log('Token found:', token); // Débogage
         if (token) {
           const decoded = jwtDecode(token);
-          console.log('Token expiration:', new Date(decoded.exp * 1000).toISOString()); // Débogage
           if (decoded.exp * 1000 > Date.now()) {
-            console.log('Token valid, redirecting to /(tabs)');
             setInitialRoute('/(tabs)');
           } else {
-            console.log('Token expired, removing');
             await AsyncStorage.removeItem('token');
             setInitialRoute('/login');
           }
-        } else {
-          console.log('No token, redirecting to /login');
         }
       } catch (error) {
         console.error('Auth error:', error);
@@ -34,14 +42,12 @@ export default function App() {
     checkAuth();
   }, []);
 
+  // Redirection vers la route initiale
   useEffect(() => {
-    if (initialRoute) {
-      console.log('Navigating to:', initialRoute); // Débogage
-      router.replace(initialRoute);
-    }
+    if (initialRoute) router.replace(initialRoute);
   }, [initialRoute]);
 
-  // Placeholder pendant le chargement
+  // Affichage d'un écran de chargement
   if (!initialRoute) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -50,5 +56,5 @@ export default function App() {
     );
   }
 
-  return null; // Navigation gérée par Expo Router
+  return null;
 }

@@ -142,7 +142,348 @@ exports.getAnnualReport = async (req, res) => {
   }
 };
 
+
+
+
+// ================== GRAPHIQUES ==================
+
+// === 1️⃣ PAR HEURE (journée de 8h à 8h)
+exports.getDailyGraphData = async (req, res) => {
+  try {
+    const { date } = req.query;
+    const { start, end } = getWorkdayRange(new Date(date));
+
+    const stays = await Stay.find({
+      startTime: { $gte: start, $lt: end }
+    });
+
+    const expenses = await Expense.find({
+      date: { $gte: start, $lt: end }
+    });
+
+    // Initialiser les 24 heures (8h → 8h)
+    const hours = Array.from({ length: 24 }, (_, i) => {
+      const hour = (8 + i) % 24;
+      return {
+        hour,
+        label: `${hour.toString().padStart(2, "0")}:00`,
+        income: 0,
+        totalStays: 0,
+        expenses: 0,
+        remaining: 0
+      };
+    });
+
+    // === STAYS ===
+    for (const stay of stays) {
+      // 🟢 HEURE NORMALE
+      if (stay.phase === "hour") {
+        const h = new Date(stay.startTime).getHours();
+        const bucket = hours.find(x => x.hour === h);
+        if (bucket) {
+          bucket.income += stay.amount || 0;
+          bucket.totalStays += 1;
+        }
+      }
+
+      // 🌙 NUITÉE → ajoutée à 08:00
+      if (stay.phase === "night") {
+        const bucket = hours.find(x => x.hour === 8);
+        if (bucket) {
+          bucket.income += stay.amount || 0;
+          bucket.totalStays += 1;
+        }
+      }
+    }
+
+    // === EXPENSES ===
+    for (const exp of expenses) {
+      const h = new Date(exp.date).getHours();
+      const bucket = hours.find(x => x.hour === h);
+      if (bucket) {
+        bucket.expenses += exp.amount || 0;
+      }
+    }
+
+    // Calcul remaining
+    for (const h of hours) {
+      h.remaining = h.income - h.expenses;
+    }
+
+    res.json({
+      range: { start, end },
+      data: hours
+    });
+  } catch (err) {
+    console.error("getDailyGraphData error:", err);
+    res.status(500).json({ msg: "Erreur serveur", error: err.message });
+  }
+};
+
+
+// === 2️⃣ PAR JOUR (hebdomadaire, chaque jour = 8h→8h)
+exports.getWeeklyGraphData = async (req, res) => {
+  try {
+    const today = new Date();
+    const lastWeek = new Date();
+    lastWeek.setDate(today.getDate() - 6); // 7 derniers jours
+
+    const result = [];
+
+    for (let i = 0; i < 7; i++) {
+      const currentDay = new Date(lastWeek);
+      currentDay.setDate(lastWeek.getDate() + i);
+
+      // ✅ journée de travail 8h → 8h
+      const start = new Date(currentDay);
+      start.setHours(8, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 1);
+      end.setHours(7, 59, 59, 999);
+
+      const [stays, expenses] = await Promise.all([
+        Stay.find({ startTime: { $gte: start, $lt: end } }),
+        Expense.find({ date: { $gte: start, $lt: end } })
+      ]);
+
+      const totalIncome = stays.reduce((sum, s) => sum + (s.amount || 0), 0);
+      const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+      result.push({
+        day: start.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }),
+        income: totalIncome,
+        expenses: totalExpenses,
+        remaining: totalIncome - totalExpenses
+      });
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error("getWeeklyGraphData error:", err);
+    res.status(500).json({ msg: "Erreur serveur", error: err.message });
+  }
+};
+
+
+// === 3️⃣ PAR MOIS (chaque mois = somme des journées 8h→8h)
+exports.getMonthlyGraphData = async (req, res) => {
+  try {
+    const { year } = req.query;
+    const data = [];
+
+    for (let month = 0; month < 12; month++) {
+      const start = new Date(year, month, 1, 8, 0, 0, 0);
+      const end = new Date(year, month + 1, 1, 8, 0, 0, 0);
+
+      const [stays, expenses, entries] = await Promise.all([
+        Stay.find({ startTime: { $gte: start, $lt: end } }),
+        Expense.find({ date: { $gte: start, $lt: end } }),
+        Entry.find({ date: { $gte: start, $lt: end } })
+      ]);
+
+      // === REVENUS ===
+      const hourIncome = stays
+        .filter(s => s.phase === "hour")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+      const nightIncome = stays
+        .filter(s => s.phase === "night")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+      const entriesIncome = entries.reduce(
+        (sum, e) => sum + (e.totalIncome || 0),
+        0
+      );
+
+      const totalIncome = hourIncome + nightIncome + entriesIncome;
+
+      // === DÉPENSES ===
+      const totalExpenses = expenses.reduce(
+        (sum, e) => sum + (e.amount || 0),
+        0
+      );
+
+      data.push({
+        month: month + 1,
+        label: start.toLocaleString("fr-FR", { month: "short" }),
+        income: totalIncome,
+        expenses: totalExpenses,
+        remaining: totalIncome - totalExpenses
+      });
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error("getMonthlyGraphData error:", err);
+    res.status(500).json({ msg: "Erreur serveur" });
+  }
+};
+
+
+
+// === 4️⃣ PAR ANNÉE (8h→8h pour cohérence, agrégé globalement)
+exports.getAnnualGraphData = async (req, res) => {
+  try {
+    const stays = await Stay.find();
+    const expenses = await Expense.find();
+    const entries = await Entry.find();
+
+    const years = [
+      ...new Set([
+        ...stays.map(s => new Date(s.startTime).getFullYear()),
+        ...expenses.map(e => new Date(e.date).getFullYear()),
+        ...entries.map(e => new Date(e.date).getFullYear())
+      ])
+    ].sort();
+
+    const data = years.map(year => {
+      const yearStays = stays.filter(
+        s => new Date(s.startTime).getFullYear() === year
+      );
+
+      const yearExpenses = expenses.filter(
+        e => new Date(e.date).getFullYear() === year
+      );
+
+      const yearEntries = entries.filter(
+        e => new Date(e.date).getFullYear() === year
+      );
+
+      const hourIncome = yearStays
+        .filter(s => s.phase === "hour")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+      const nightIncome = yearStays
+        .filter(s => s.phase === "night")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+      const entriesIncome = yearEntries.reduce(
+        (sum, e) => sum + (e.totalIncome || 0),
+        0
+      );
+
+      const totalIncome = hourIncome + nightIncome + entriesIncome;
+
+      const totalExpenses = yearExpenses.reduce(
+        (sum, e) => sum + (e.amount || 0),
+        0
+      );
+
+      return {
+        year,
+        label: year.toString(),
+        income: totalIncome,
+        expenses: totalExpenses,
+        remaining: totalIncome - totalExpenses
+      };
+    });
+
+    res.json(data);
+  } catch (err) {
+    console.error("getAnnualGraphData error:", err);
+    res.status(500).json({ msg: "Erreur serveur" });
+  }
+};
+
+
+
+
 // ================== SUMMARY ==================
+
+// === RÉSUMÉ DU JOUR (8h→8h) ===
+exports.getTodaySummary = async (req, res) => {
+  try {
+    const today = new Date();
+    const { start, end } = getWorkdayRange(today);
+
+    const stays = await Stay.find({ startTime: { $gte: start, $lt: end } });
+    const expenses = await Expense.find({ date: { $gte: start, $lt: end } });
+
+    const totalIncome = stays.reduce((sum, s) => sum + (s.amount || 0), 0);
+    const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    res.json({
+      range: { start, end },
+      totalIncome,
+      totalExpenses,
+      remaining: totalIncome - totalExpenses,
+      stays,
+      expenses
+    });
+  } catch (err) {
+    console.error("getTodaySummary error:", err);
+    res.status(500).json({ msg: "Erreur serveur", error: err.message });
+  }
+};
+
+// === RÉSUMÉ HEBDOMADAIRE (chaque jour de 8h→8h) ===
+exports.getWeeklySummary = async (req, res) => {
+  try {
+    const today = new Date();
+    const lastWeek = new Date();
+    lastWeek.setDate(today.getDate() - 6);
+
+    const result = [];
+
+    for (let i = 0; i < 7; i++) {
+      const refDate = new Date(lastWeek);
+      refDate.setDate(lastWeek.getDate() + i);
+
+      const { start, end } = getWorkdayRange(refDate);
+
+      // === STAYS ===
+      const stays = await Stay.find({
+        startTime: { $gte: start, $lte: end }
+      });
+
+      const hourIncome = stays
+        .filter(s => s.phase === "hour")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+      const nightIncome = stays
+        .filter(s => s.phase === "night")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+      // === ENTRIES CAISSE ===
+      const entries = await Entry.find({
+        date: { $gte: start, $lte: end }
+      });
+
+      const entriesIncome = entries.reduce(
+        (sum, e) => sum + (e.totalIncome || 0),
+        0
+      );
+
+      // === DÉPENSES ===
+      const expenses = await Expense.aggregate([
+        { $match: { date: { $gte: start, $lte: end } } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ]);
+
+      const totalExpenses = expenses[0]?.total || 0;
+
+      // ✅ TOTAL CORRECT (HEURE + NUITÉE + ENTRÉES)
+      const totalIncome = hourIncome + nightIncome + entriesIncome;
+
+      result.push({
+        day: start.toLocaleDateString("fr-FR", {
+          day: "numeric",
+          month: "short"
+        }),
+        in: totalIncome,
+        out: totalExpenses,
+        remaining: totalIncome - totalExpenses
+      });
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error("❌ Erreur getWeeklySummary :", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// === RÉSUMÉ QUOTIDIEN DÉTAILLÉ (déjà 8h→8h, OK) ===
 exports.getDailySummary = async (req, res) => {
   try {
     const { date } = req.query;
@@ -200,182 +541,65 @@ exports.getDailySummary = async (req, res) => {
 
 
 
-// ================== GRAPHIQUES ==================
-// Par heure (quotidien)
-exports.getDailyGraphData = async (req, res) => {
+// ================== EXPORTS ==================
+// === PDF QUOTIDIEN (8h → 8h) ===
+exports.exportDailyPDF = async (req, res) => {
   try {
     const { date } = req.query;
     const { start, end } = getWorkdayRange(new Date(date));
 
-    const [stays, expenses] = await Promise.all([
-      Stay.aggregate([
-        { $match: { startTime: { $gte: start, $lt: end } } },
-        {
-          $group: {
-            _id: { hour: { $hour: "$startTime" } },
-            income: { $sum: "$amount" },
-            totalStays: { $sum: 1 }
-          }
-        },
-        { $sort: { "_id.hour": 1 } }
-      ]),
-      Expense.aggregate([
-        { $match: { date: { $gte: start, $lt: end } } },
-        {
-          $group: {
-            _id: { hour: { $hour: "$date" } },
-            totalExpenses: { $sum: "$amount" }
-          }
-        },
-        { $sort: { "_id.hour": 1 } }
-      ])
-    ]);
+    const stays = await Stay.find({ startTime: { $gte: start, $lt: end } });
+    const expenses = await Expense.find({ date: { $gte: start, $lt: end } });
+    const entries = await Entry.find({ date: { $gte: start, $lt: end } });
 
-    const data = [];
-    for (let h = 0; h < 24; h++) {
-      const stay = stays.find(s => s._id.hour === h);
-      const exp = expenses.find(e => e._id.hour === h);
-      data.push({
-        hour: h,
-        income: stay?.income || 0,
-        totalStays: stay?.totalStays || 0,
-        expenses: exp?.totalExpenses || 0,
-        remaining: (stay?.income || 0) - (exp?.totalExpenses || 0)
-      });
-    }
+    const hourIncome = stays
+      .filter(s => s.phase === "hour")
+      .reduce((sum, s) => sum + (s.amount || 0), 0);
 
-    res.json({ range: { start, end }, data });
+    const nightIncome = stays
+      .filter(s => s.phase === "night")
+      .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+    const entriesIncome = entries.reduce(
+      (sum, e) => sum + (e.totalIncome || 0),
+      0
+    );
+
+    const totalIncome = hourIncome + nightIncome + entriesIncome;
+
+    const totalExpenses = expenses.reduce(
+      (sum, e) => sum + (e.amount || 0),
+      0
+    );
+
+    const pdfBuffer = generateDailyPDF({
+      hourIncome,
+      nightIncome,
+      entriesIncome,
+      income: totalIncome,
+      expenses: totalExpenses,
+      remaining: totalIncome - totalExpenses,
+      totalStays: stays.length,
+      nightStays: stays.filter(s => s.phase === "night").length,
+      range: { start, end }
+    }, date);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="releve-${date}.pdf"`
+    );
+    res.send(pdfBuffer);
   } catch (err) {
-    console.error("getDailyGraphData error:", err);
-    res.status(500).json({ msg: "Erreur serveur", error: err.message });
+    console.error("exportDailyPDF error:", err);
+    res.status(500).send("Erreur export PDF quotidien");
   }
 };
 
 
-// Par mois (revenus + dépenses) dans une année donnée
-
-exports.getMonthlyGraphData = async (req, res) => {
+// === PDF HEBDOMADAIRE (chaque jour de 8h→8h) ===
+exports.exportWeeklyPDF = async (req, res) => {
   try {
-    const { year } = req.query;
-
-    const start = new Date(year, 0, 1, 0, 0, 0, 0);
-    const end = new Date(year + 1, 0, 1, 0, 0, 0, 0);
-
-    const [stays, expenses] = await Promise.all([
-      Stay.aggregate([
-        { $match: { startTime: { $gte: start, $lt: end } } },
-        {
-          $group: {
-            _id: { month: { $month: "$startTime" } },
-            income: { $sum: "$amount" }
-          }
-        },
-        { $sort: { "_id.month": 1 } }
-      ]),
-      Expense.aggregate([
-        { $match: { date: { $gte: start, $lt: end } } },
-        {
-          $group: {
-            _id: { month: { $month: "$date" } },
-            expenses: { $sum: "$amount" }
-          }
-        },
-        { $sort: { "_id.month": 1 } }
-      ])
-    ]);
-
-    const data = [];
-    for (let m = 1; m <= 12; m++) {
-      const stay = stays.find(s => s._id.month === m);
-      const exp = expenses.find(e => e._id.month === m);
-      data.push({
-        month: m,
-        income: stay?.income || 0,
-        expenses: exp?.expenses || 0,
-        remaining: (stay?.income || 0) - (exp?.expenses || 0)
-      });
-    }
-
-    res.json(data);
-  } catch (err) {
-    console.error("getMonthlyGraphData error:", err);
-    res.status(500).json({ msg: "Erreur serveur", error: err.message });
-  }
-};
-
-
-
-
-// Par année (revenus + dépenses)
-exports.getAnnualGraphData = async (req, res) => {
-  try {
-    const [stays, expenses] = await Promise.all([
-      Stay.aggregate([
-        {
-          $group: {
-            _id: { year: { $year: "$startTime" } },
-            income: { $sum: "$amount" },
-            totalStays: { $sum: 1 }
-          }
-        },
-        { $sort: { "_id.year": 1 } }
-      ]),
-      Expense.aggregate([
-        {
-          $group: {
-            _id: { year: { $year: "$date" } },
-            totalExpenses: { $sum: "$amount" }
-          }
-        },
-        { $sort: { "_id.year": 1 } }
-      ])
-    ]);
-
-    const years = [
-      ...new Set([
-        ...stays.map(s => s._id.year),
-        ...expenses.map(e => e._id.year)
-      ])
-    ].sort();
-
-    const data = years.map(y => {
-      const stay = stays.find(s => s._id.year === y);
-      const exp = expenses.find(e => e._id.year === y);
-      return {
-        year: y,
-        income: stay?.income || 0,
-        expenses: exp?.totalExpenses || 0,
-        remaining: (stay?.income || 0) - (exp?.totalExpenses || 0),
-        totalStays: stay?.totalStays || 0
-      };
-    });
-
-    res.json(data);
-  } catch (err) {
-    console.error("getAnnualGraphData error:", err);
-    res.status(500).json({ msg: "Erreur serveur", error: err.message });
-  }
-};
-
-
-
-
-// ================== SUMMARY ==================
-exports.getTodaySummary = async (req, res) => {
-  try {
-    const today = new Date();
-    req.query.date = today.toISOString().split("T")[0];
-    return this.getDailySummary(req, res);
-  } catch (err) {
-    console.error("getTodaySummary error:", err);
-    res.status(500).json({ msg: "Erreur serveur", error: err.message });
-  }
-};
-
-exports.getWeeklySummary = async (req, res) => {
-  try {
-    console.log("📅 Route /weekly-summary appelée");
-
     const today = new Date();
     const lastWeek = new Date();
     lastWeek.setDate(today.getDate() - 6);
@@ -383,187 +607,175 @@ exports.getWeeklySummary = async (req, res) => {
     const result = [];
 
     for (let i = 0; i < 7; i++) {
-      const day = new Date(lastWeek);
-      day.setDate(lastWeek.getDate() + i);
+      const refDate = new Date(lastWeek);
+      refDate.setDate(lastWeek.getDate() + i);
 
-      const startOfDay = new Date(day.setHours(0, 0, 0, 0));
-      const endOfDay = new Date(day.setHours(23, 59, 59, 999));
+      const { start, end } = getWorkdayRange(refDate);
 
-      // ✅ corriger ici → utiliser startTime
-      const stays = await Stay.find({
-        startTime: { $gte: startOfDay, $lte: endOfDay }
-      });
+      const stays = await Stay.find({ startTime: { $gte: start, $lt: end } });
+      const expenses = await Expense.find({ date: { $gte: start, $lt: end } });
+      const entries = await Entry.find({ date: { $gte: start, $lt: end } });
 
-      const expenses = await Expense.find({
-        date: { $gte: startOfDay, $lte: endOfDay }
-      });
+      const hourIncome = stays
+        .filter(s => s.phase === "hour")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
 
-      const totalIncome = stays.reduce((sum, s) => sum + (s.amount || 0), 0);
-      const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+      const nightIncome = stays
+        .filter(s => s.phase === "night")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
 
-      result.push({
-        day: startOfDay.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }),
-        in: totalIncome,
-        out: totalExpenses,
-      });
-    }
+      const entriesIncome = entries.reduce(
+        (sum, e) => sum + (e.totalIncome || 0),
+        0
+      );
 
-    console.log("✅ Résumé hebdo généré :", result);
-    res.json(result);
-  } catch (err) {
-    console.error("❌ Erreur getWeeklySummary :", err);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-};
+      const totalIncome = hourIncome + nightIncome + entriesIncome;
 
-
-// ================== EXPORTS ==================
-// === PDF QUOTIDIEN ===
-exports.exportDailyPDF = async (req, res) => {
-  try {
-    const { date } = req.query;
-    const dayStart = new Date(date);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(date);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    const stays = await Stay.find({ startTime: { $gte: dayStart, $lte: dayEnd } });
-    const expenses = await Expense.find({ date: { $gte: dayStart, $lte: dayEnd } });
-
-    const totalIncome = stays.reduce((sum, s) => sum + (s.amount || 0), 0);
-    const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const totalStays = stays.length;
-    const nightStays = stays.filter(s => s.phase === "night").length;
-
-    const pdfBuffer = generateDailyPDF({
-      income: totalIncome,
-      expenses: totalExpenses,
-      remaining: totalIncome - totalExpenses,
-      totalStays,
-      nightStays
-    }, date);
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="releve-${date}.pdf"`);
-    res.send(pdfBuffer);
-  } catch (err) {
-    console.error("exportDailyPDF error:", err);
-    res.status(500).send('Erreur export PDF quotidien');
-  }
-};
-
-// === PDF HEBDOMADAIRE ===
-exports.exportWeeklyPDF = async (req, res) => {
-  try {
-    const today = new Date();
-    const lastWeek = new Date();
-    lastWeek.setDate(today.getDate() - 6); // les 7 derniers jours
-
-    const result = [];
-
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(lastWeek);
-      day.setDate(lastWeek.getDate() + i);
-
-      const start = new Date(day.setHours(0, 0, 0, 0));
-      const end = new Date(day.setHours(23, 59, 59, 999));
-
-      const stays = await Stay.find({ startTime: { $gte: start, $lte: end } });
-      const expenses = await Expense.find({ date: { $gte: start, $lte: end } });
-
-      const totalIncome = stays.reduce((sum, s) => sum + (s.amount || 0), 0);
-      const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+      const totalExpenses = expenses.reduce(
+        (sum, e) => sum + (e.amount || 0),
+        0
+      );
 
       result.push({
-        date: start.toLocaleDateString('fr-FR'),
+        date: start.toLocaleDateString("fr-FR"),
         income: totalIncome,
         expenses: totalExpenses,
-        remaining: totalIncome - totalExpenses,
+        remaining: totalIncome - totalExpenses
       });
     }
 
     const pdfBuffer = generateWeeklyPDF(result);
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="releve-semaine.pdf"`);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="releve-semaine.pdf"`
+    );
     res.send(pdfBuffer);
   } catch (err) {
     console.error("exportWeeklyPDF error:", err);
-    res.status(500).send('Erreur export PDF hebdomadaire');
+    res.status(500).send("Erreur export PDF hebdomadaire");
   }
 };
 
 
-// === PDF MENSUEL ===
+// === PDF MENSUEL (chaque jour de 8h→8h) ===
 exports.exportMonthlyPDF = async (req, res) => {
   try {
     const { month, year } = req.query;
-    const start = new Date(year, month - 1, 1, 0, 0, 0);
-    const end = new Date(year, month, 0, 23, 59, 59);
-
-    const stays = await Stay.find({ startTime: { $gte: start, $lte: end } });
-    const expenses = await Expense.find({ date: { $gte: start, $lte: end } });
-
     const daysInMonth = new Date(year, month, 0).getDate();
     const data = [];
 
     for (let d = 1; d <= daysInMonth; d++) {
-      const dayStart = new Date(year, month - 1, d, 0, 0, 0);
-      const dayEnd = new Date(year, month - 1, d, 23, 59, 59);
+      const refDate = new Date(year, month - 1, d);
+      const { start, end } = getWorkdayRange(refDate);
 
-      const dayStays = stays.filter(s => s.startTime >= dayStart && s.startTime <= dayEnd);
-      const dayExpenses = expenses.filter(e => e.date >= dayStart && e.date <= dayEnd);
+      const stays = await Stay.find({ startTime: { $gte: start, $lt: end } });
+      const expenses = await Expense.find({ date: { $gte: start, $lt: end } });
+      const entries = await Entry.find({ date: { $gte: start, $lt: end } });
+
+      // === REVENUS ===
+      const hourIncome = stays
+        .filter(s => s.phase === "hour")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+      const nightIncome = stays
+        .filter(s => s.phase === "night")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+      const entriesIncome = entries.reduce(
+        (sum, e) => sum + (e.totalIncome || 0),
+        0
+      );
+
+      const totalIncome = hourIncome + nightIncome + entriesIncome;
+
+      // === DÉPENSES ===
+      const totalExpenses = expenses.reduce(
+        (sum, e) => sum + (e.amount || 0),
+        0
+      );
 
       data.push({
-        date: d + '/' + month,
-        income: dayStays.reduce((sum, s) => sum + (s.amount || 0), 0),
-        expenses: dayExpenses.reduce((sum, e) => sum + (e.amount || 0), 0),
-        remaining: dayStays.reduce((sum, s) => sum + (s.amount || 0), 0) - dayExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+        date: `${d}/${month}`,
+        income: totalIncome,
+        expenses: totalExpenses,
+        remaining: totalIncome - totalExpenses
       });
     }
 
     const pdfBuffer = generateMonthlyPDF(data, month, year);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="releve-mois-${month}-${year}.pdf"`);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="releve-mois-${month}-${year}.pdf"`
+    );
     res.send(pdfBuffer);
   } catch (err) {
     console.error("exportMonthlyPDF error:", err);
-    res.status(500).send('Erreur export PDF mensuel');
+    res.status(500).send("Erreur export PDF mensuel");
   }
 };
 
-// === PDF ANNUEL ===
+
+// === PDF ANNUEL (chaque jour de 8h→8h sur le mois) ===
 exports.exportAnnualPDF = async (req, res) => {
   try {
     const { year } = req.query;
     const result = [];
 
     for (let m = 0; m < 12; m++) {
-      const start = new Date(year, m, 1, 0, 0, 0);
-      const end = new Date(year, m + 1, 0, 23, 59, 59);
+      const start = new Date(year, m, 1, 8, 0, 0, 0);
+      const end = new Date(year, m + 1, 1, 8, 0, 0, 0);
 
-      const stays = await Stay.find({ startTime: { $gte: start, $lte: end } });
-      const expenses = await Expense.find({ date: { $gte: start, $lte: end } });
+      const stays = await Stay.find({ startTime: { $gte: start, $lt: end } });
+      const expenses = await Expense.find({ date: { $gte: start, $lt: end } });
+      const entries = await Entry.find({ date: { $gte: start, $lt: end } });
+
+      // === REVENUS ===
+      const hourIncome = stays
+        .filter(s => s.phase === "hour")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+      const nightIncome = stays
+        .filter(s => s.phase === "night")
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
+
+      const entriesIncome = entries.reduce(
+        (sum, e) => sum + (e.totalIncome || 0),
+        0
+      );
+
+      const totalIncome = hourIncome + nightIncome + entriesIncome;
+
+      // === DÉPENSES ===
+      const totalExpenses = expenses.reduce(
+        (sum, e) => sum + (e.amount || 0),
+        0
+      );
 
       result.push({
-        label: start.toLocaleString('fr-FR', { month: 'long' }),
-        income: stays.reduce((sum, s) => sum + (s.amount || 0), 0),
-        expenses: expenses.reduce((sum, e) => sum + (e.amount || 0), 0),
-        remaining: stays.reduce((sum, s) => sum + (s.amount || 0), 0) - expenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+        label: start.toLocaleString("fr-FR", { month: "long" }),
+        income: totalIncome,
+        expenses: totalExpenses,
+        remaining: totalIncome - totalExpenses
       });
     }
 
     const pdfBuffer = generateAnnualPDF(result, year);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="releve-${year}.pdf"`);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="releve-${year}.pdf"`
+    );
     res.send(pdfBuffer);
   } catch (err) {
     console.error("exportAnnualPDF error:", err);
-    res.status(500).send('Erreur export PDF annuel');
+    res.status(500).send("Erreur export PDF annuel");
   }
 };
-
-
 
 
 

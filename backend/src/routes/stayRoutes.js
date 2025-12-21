@@ -1,9 +1,6 @@
-// backend/src/routes/stayRoutes.js
 const express = require('express');
 const router = express.Router();
-
-// 🔹 Import des controllers avec chemin correct
-const stayController = require('../controllers/stayController'); 
+const stayController = require('../controllers/stayController');
 const { protect } = require('../middlewares/authMiddleware');
 const role = require('../middlewares/roleMiddleware');
 const Stay = require('../models/Stay');
@@ -16,14 +13,13 @@ if (!stayController.addStay || !stayController.getStays || !stayController.endSt
 // ================== GET LISTE DES SÉJOURS ==================
 router.get('/', protect, role(['employee', 'admin']), stayController.getStays);
 
-// ================== GET HISTORIQUE UTILISATEUR ==================
 // ================== GET HISTORIQUE GLOBAL ==================
 router.get('/history', protect, async (req, res) => {
   try {
     const stays = await Stay.find()
       .populate('roomId', 'number')
       .populate('createdBy', 'username role')
-      .sort({ createdAt: -1 }); // plus récents en premier
+      .sort({ createdAt: -1 });
 
     const formatted = stays.map((s) => ({
       _id: s._id,
@@ -32,7 +28,7 @@ router.get('/history', protect, async (req, res) => {
       checkOut: s.endTime,
       amount: s.amount,
       paymentMethod: s.paymentMethod,
-      expenses: s.expenses || 0, // ✅ corrigé (pas de reduce)
+      expenses: s.expenses || 0,
       stayType: s.phase,
       createdAt: s.createdAt,
       createdBy: s.createdBy?.username || "Système"
@@ -45,11 +41,16 @@ router.get('/history', protect, async (req, res) => {
   }
 });
 
-
 // ================== CRÉATION D’UN SÉJOUR ==================
 router.post('/', protect, role(['employee', 'admin']), stayController.addStay);
 
 // ================== FIN D’UN SÉJOUR ==================
 router.put('/:id/end', protect, role(['employee', 'admin']), stayController.endStay);
+
+// ================== MODIFIER UN SÉJOUR ==================
+router.put('/:id', protect, role(['admin']), stayController.updateStay);
+
+// ================== SUPPRIMER UN SÉJOUR ==================
+router.delete('/:id', protect, role(['admin']), stayController.deleteStay);
 
 module.exports = router;
