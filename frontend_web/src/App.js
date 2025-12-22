@@ -19,7 +19,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      api.get('/auth/')
+      api.get('/auth/me')
         .then((res) => {
           setIsAuthenticated(true);
           setUserRole(res.data.role);

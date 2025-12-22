@@ -15,6 +15,18 @@ exports.register = async (req, res) => {
   res.status(201).json({ msg: 'Utilisateur enregistré' });
 };
 
+exports.me = async (req, res) => {
+  try {
+    res.json({
+      id: req.user.id,
+      username: req.user.username,
+      role: req.user.role
+    });
+  } catch (err) {
+    res.status(500).json({ msg: "Erreur serveur" });
+  }
+};
+
 exports.login = async (req, res) => {
   try {
     const { username, password } = req.body;
