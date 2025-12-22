@@ -115,9 +115,33 @@ export default function Rooms() {
 
       sound.setOnPlaybackStatusUpdate(async (status) => {
         if (status.isLoaded && status.didJustFinish) {
-          loop();
+          try {
+            await sound.stopAsync();
+            await sound.unloadAsync();
+          } catch {}
+
+          Vibration.cancel();
+          setActiveAlarms({});
+
+          // ⛔ SUPPRESSION DU TIMER (IMPORTANT)
+          const stored = await loadTimers();
+          const updatedTimers = { ...stored };
+          delete updatedTimers[roomId];
+          saveTimers(updatedTimers);
+          setTimers(updatedTimers);
+
+          // 🔁 MISE À JOUR DE L’ÉTAT
+          const token = await AsyncStorage.getItem("token");
+          await api.put(
+            `/rooms/${roomId}`,
+            { state: "free" },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          load();
         }
       });
+
 
       await sound.playAsync();
       Vibration.vibrate([500, 500], true);
