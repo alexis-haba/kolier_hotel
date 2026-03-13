@@ -1,9 +1,17 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { API_URL } from '@env';
 
+const configApiUrl = Constants.expoConfig?.extra?.apiUrl;
+const resolvedApiUrl = (API_URL || configApiUrl || '').trim();
+
+if (!resolvedApiUrl) {
+  console.warn('[API] API_URL manquante. Vérifiez .env.local/.env.production ou app.config.js');
+}
+
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: resolvedApiUrl,
 });
 
 // Intercepteurs comme avant

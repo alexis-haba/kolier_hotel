@@ -38,13 +38,13 @@ exports.login = async (req, res) => {
     // ⚠️ select('+password') est obligatoire ici
     const user = await User.findOne({ username }).select('+password');
     if (!user) {
-      console.log("❌ Utilisateur introuvable:", username);
+      console.log("Utilisateur introuvable:", username);
       return res.status(401).json({ msg: "Invalid credentials" });
     }
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      console.log("❌ Mot de passe incorrect pour:", username);
+      console.log("Mot de passe incorrect pour:", username);
       return res.status(401).json({ msg: "Invalid credentials" });
     }
 

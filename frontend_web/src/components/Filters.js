@@ -21,23 +21,32 @@ const Filters = ({ filters, setFilters }) => {
   const today = new Date().toISOString().split("T")[0];
 
   return (
-    <div className="mb-4">
-      <label className="me-2">Date:</label>
-      <input
-        type="date"
-        value={filters.date || today}
-        onChange={(e) => setFilters({ ...filters, date: e.target.value })}
-        className="form-control d-inline-block w-auto me-2"
-      />
+    <div className="mb-3 w-100 p-2 rounded" style={{ backgroundColor: '#ffffff' }}>
+      <div className="row g-2">
+        <div className="col-12 col-md-4">
+          <label className="form-label mb-1 fw-semibold filter-label">Date:</label>
+          <input
+            type="date"
+            value={filters.date || today}
+            onChange={(e) => setFilters({ ...filters, date: e.target.value })}
+            className="form-control"
+            style={{ minHeight: 44 }}
+          />
+        </div>
 
-      <label className="me-2">Chambre:</label>
-      <input
-        value={filters.roomId}
-        onChange={(e) => setFilters({ ...filters, roomId: e.target.value })}
-        placeholder="ID chambre"
-        className="form-control d-inline-block w-auto me-2"
-        list="roomList"
-      />
+        <div className="col-12 col-md-8">
+          <label className="form-label mb-1 fw-semibold filter-label">Chambre:</label>
+          <input
+            value={filters.roomId}
+            onChange={(e) => setFilters({ ...filters, roomId: e.target.value })}
+            placeholder="Rechercher une chambre..."
+            className="form-control"
+            list="roomList"
+            style={{ minHeight: 44 }}
+          />
+        </div>
+      </div>
+
       <datalist id="roomList">
         {rooms.map((room) => (
           <option key={room._id} value={room._id}>

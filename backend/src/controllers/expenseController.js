@@ -21,7 +21,8 @@ exports.addExpense = async (req, res) => {
         includeInDailyTotal:
           exp.includeInDailyTotal !== undefined
             ? exp.includeInDailyTotal
-            : true, // ✅ valeur par défaut
+            : true, // valeur par défaut
+        createdBy: req.user && req.user.id ? req.user.id : undefined,
       });
       await expense.save();
       saved.push(expense);
@@ -72,7 +73,7 @@ exports.deleteExpense = async (req, res) => {
 
     await expense.deleteOne();
 
-    // ✅ Enregistrer l’action dans l’audit log
+    // Enregistrer l’action dans l’audit log
     await new AuditLog({
       action: "delete_expense",
       userId: req.user.id,
@@ -103,7 +104,7 @@ exports.updateExpense = async (req, res) => {
 
     await expense.save();
 
-    // ✅ Audit log
+    // Audit log
     await new AuditLog({
       action: "update_expense",
       userId: req.user.id,

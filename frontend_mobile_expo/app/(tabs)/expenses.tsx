@@ -79,7 +79,7 @@ export default function Expenses() {
                 { headers: { Authorization: `Bearer ${token}` } }
               );
 
-              lastSaved.current = currentData; // ✅ garde la dernière sauvegarde
+              lastSaved.current = currentData; // garde la dernière sauvegarde
               Alert.alert("Succès", "Dépenses enregistrées !");
               setItems([{ reason: "", amount: "" }]);
             } catch (err) {

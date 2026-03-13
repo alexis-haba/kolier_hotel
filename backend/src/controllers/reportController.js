@@ -1,9 +1,71 @@
+// Helper pour obtenir les 7 jours d'une semaine ISO
+function getWeekDates(weekString) {
+  // weekString format: '2026-W10'
+  const [year, week] = weekString.split('-W');
+  const firstDay = new Date(year, 0, 1 + (week - 1) * 7);
+  // Corrige pour le lundi
+  const dayOfWeek = firstDay.getDay();
+  const monday = new Date(firstDay);
+  monday.setDate(firstDay.getDate() + (dayOfWeek === 0 ? 1 : (1 - dayOfWeek)));
+  // Génère les 7 jours
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+}
+
+// Export PDF hebdomadaire détaillé
+exports.exportWeeklyPDF = async (req, res) => {
+  try {
+    // Accepte weeks=2026-W10,2026-W11 ou week=2026-W10
+    let weeks = req.query.weeks || req.query.week;
+    if (!weeks) throw new Error('Aucune semaine sélectionnée');
+    if (typeof weeks === 'string') weeks = weeks.split(',');
+    let allDaysData = [];
+    for (const weekStr of weeks) {
+      const weekDates = getWeekDates(weekStr);
+      const daysData = await Promise.all(
+        weekDates.map(async (date) => {
+          const start = new Date(date);
+          start.setHours(8, 0, 0, 0);
+          const end = new Date(date);
+          end.setHours(7, 59, 59, 999);
+          end.setDate(end.getDate() + 1);
+          const stays = await Stay.find({ startTime: { $gte: start, $lt: end } });
+          const expenses = await Expense.find({ date: { $gte: start, $lt: end } });
+          const entries = await Entry.find({ date: { $gte: start, $lt: end } });
+          return {
+            date: start,
+            stays,
+            expenses,
+            entries
+          };
+        })
+      );
+      allDaysData = allDaysData.concat(daysData);
+    }
+    // Génère le PDF détaillé avec tous les jours
+    const pdfBuffer = await generateWeeklyPDFDetailed(allDaysData, true);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=rapport-hebdo.pdf`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('exportWeeklyPDF error:', err);
+    res.status(500).json({ msg: 'Erreur export PDF hebdo', error: err.message });
+  }
+};
+// Suppression de l'import Word
+// Suppression de l'exportWeeklyWord
+// Suppression de l'exportMonthlyWord
+// Suppression de l'exportAnnualWord
+// Suppression de l'exportDailyWord
 const Stay = require('../models/Stay');
 const Expense = require('../models/Expense');
 const Room = require('../models/Room');
 const Entry = require('../models/DailyEntry');
 const { generatePDF } = require('../utils/generatePDF');
-const { generateDailyPDF, generateWeeklyPDF, generateMonthlyPDF, generateAnnualPDF } = require('../utils/generatePDF');
+const { generateDailyPDF, generateWeeklyPDF, generateMonthlyPDF, generateAnnualPDF, generateAnnualPDFDetailed } = require('../utils/generatePDF');
 const { generateExcel } = require('../utils/generateExcel');
 const getWorkdayRange = require('../utils/getWorkdayRange');
 
@@ -234,7 +296,7 @@ exports.getWeeklyGraphData = async (req, res) => {
       const currentDay = new Date(lastWeek);
       currentDay.setDate(lastWeek.getDate() + i);
 
-      // ✅ journée de travail 8h → 8h
+      // journée de travail 8h → 8h
       const start = new Date(currentDay);
       start.setHours(8, 0, 0, 0);
       const end = new Date(start);
@@ -462,7 +524,7 @@ exports.getWeeklySummary = async (req, res) => {
 
       const totalExpenses = expenses[0]?.total || 0;
 
-      // ✅ TOTAL CORRECT (HEURE + NUITÉE + ENTRÉES)
+      // TOTAL CORRECT (HEURE + NUITÉE + ENTRÉES)
       const totalIncome = hourIncome + nightIncome + entriesIncome;
 
       result.push({
@@ -478,7 +540,7 @@ exports.getWeeklySummary = async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error("❌ Erreur getWeeklySummary :", err);
+    console.error("Erreur getWeeklySummary :", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
@@ -545,50 +607,188 @@ exports.getDailySummary = async (req, res) => {
 // === PDF QUOTIDIEN (8h → 8h) ===
 exports.exportDailyPDF = async (req, res) => {
   try {
-    const { date } = req.query;
-    const { start, end } = getWorkdayRange(new Date(date));
-
-    const stays = await Stay.find({ startTime: { $gte: start, $lt: end } });
-    const expenses = await Expense.find({ date: { $gte: start, $lt: end } });
-    const entries = await Entry.find({ date: { $gte: start, $lt: end } });
-
-    const hourIncome = stays
-      .filter(s => s.phase === "hour")
-      .reduce((sum, s) => sum + (s.amount || 0), 0);
-
-    const nightIncome = stays
-      .filter(s => s.phase === "night")
-      .reduce((sum, s) => sum + (s.amount || 0), 0);
-
-    const entriesIncome = entries.reduce(
-      (sum, e) => sum + (e.totalIncome || 0),
-      0
-    );
-
-    const totalIncome = hourIncome + nightIncome + entriesIncome;
-
-    const totalExpenses = expenses.reduce(
-      (sum, e) => sum + (e.amount || 0),
-      0
-    );
-
-    const pdfBuffer = generateDailyPDF({
-      hourIncome,
-      nightIncome,
-      entriesIncome,
-      income: totalIncome,
-      expenses: totalExpenses,
-      remaining: totalIncome - totalExpenses,
-      totalStays: stays.length,
-      nightStays: stays.filter(s => s.phase === "night").length,
-      range: { start, end }
-    }, date);
-
+    // Récupère toutes les dates demandées (séparées par virgule)
+    const datesParam = req.query.dates || req.query.date;
+    const dates = datesParam ? datesParam.split(',') : [];
+    const mode = req.query.mode || 'details';
+    const { jsPDF } = require('jspdf');
+    let doc;
+    let first = true;
+    for (const date of dates) {
+      const { start, end } = getWorkdayRange(new Date(date));
+      const stays = await Stay.find({ startTime: { $gte: start, $lt: end } }).populate('createdBy');
+      const expenses = await Expense.find({ date: { $gte: start, $lt: end } }).populate('createdBy');
+      const entries = await Entry.find({ date: { $gte: start, $lt: end } }).populate('createdBy');
+      const hourIncome = stays.filter(s => s.phase === "hour").reduce((sum, s) => sum + (s.amount || 0), 0);
+      const nightIncome = stays.filter(s => s.phase === "night").reduce((sum, s) => sum + (s.amount || 0), 0);
+      const dayIncome = stays.filter(s => s.phase === "jour").reduce((sum, s) => sum + (s.amount || 0), 0);
+      const entriesIncome = entries.reduce((sum, e) => sum + (e.totalIncome || 0), 0);
+      const totalIncome = hourIncome + nightIncome + entriesIncome;
+      const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+      const pdfData = {
+        hourIncome,
+        nightIncome,
+        dayIncome,
+        caisse: entriesIncome,
+        income: totalIncome,
+        expenses: totalExpenses,
+        remaining: totalIncome - totalExpenses,
+        totalStays: stays.length,
+        nightStays: stays.filter(s => s.phase === "night").length,
+        dayStays: stays.filter(s => s.phase === "jour").length,
+        entries: [
+          ...stays.map(s => ({
+            chambre: s.roomId?.number || '',
+            type: s.phase === 'hour' ? 'Heure' : (s.phase === 'night' ? 'Nuitée' : (s.phase === 'jour' ? 'Journée' : 'N/A')),
+            montant: s.amount || 0,
+            solde: s.amount || 0,
+            debut: s.startTime ? s.startTime.toLocaleString('fr-FR') : '',
+            fin: s.endTime ? s.endTime.toLocaleString('fr-FR') : '',
+            paiement: s.paymentMethod || '',
+            utilisateur: s.createdBy?.username || ''
+          })),
+          ...expenses.map(e => ({
+            chambre: '',
+            type: 'Dépense',
+            montant: e.amount || 0,
+            solde: '',
+            debut: e.date ? e.date.toLocaleString('fr-FR') : '',
+            fin: '',
+            paiement: '',
+            utilisateur: e.createdBy?.username || ''
+          })),
+          ...entries.map(en => ({
+            chambre: '',
+            type: 'Caisse',
+            montant: en.totalIncome || 0,
+            solde: '',
+            debut: en.date ? en.date.toLocaleString('fr-FR') : '',
+            fin: '',
+            paiement: '',
+            utilisateur: en.createdBy?.username || ''
+          }))
+        ],
+        range: { start, end }
+      };
+      // Génère le PDF pour chaque jour et ajoute une page si besoin
+      let y;
+      if (first) {
+        doc = new jsPDF();
+        first = false;
+        y = 15;
+      } else {
+        doc.addPage();
+        y = 15; // Réinitialise y à chaque nouvelle page
+      }
+      // Utilise la logique de generateDailyPDF pour chaque jour
+      // On va simuler le rendu sur le même doc
+      // Affiche le titre et la date uniquement sur la première page de la journée
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text("RELEVÉ JOURNALIER", 105, y, { align: "center" });
+      y += 8;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Date : ${date}`, 105, y, { align: "center" });
+      y += 12;
+      let isFirstPageOfDay = true;
+      if (mode === 'details' && Array.isArray(pdfData.entries) && pdfData.entries.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("DÉTAIL DES ENTRÉES", 10, y);
+        y += 7;
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.text("Chambre", 10, y);
+        doc.text("Type", 25, y);
+        doc.text("Montant", 42, y);
+        doc.text("Solde", 67, y);
+        doc.text("Début", 95, y);
+        doc.text("Fin", 130, y);
+        doc.text("Paiement", 165, y);
+        doc.text("Utilisateur", 185, y);
+        y += 5;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.line(10, y, 210, y);
+        y += 6;
+        pdfData.entries.forEach(entry => {
+          if (y > 270) {
+            doc.addPage();
+            y = 20;
+            isFirstPageOfDay = false;
+            // Ne pas répéter le titre ni la date sur les pages suivantes
+          }
+          doc.text(String(entry.chambre || ''), 10, y);
+          doc.text(String(entry.type || ''), 25, y);
+          doc.text(String(entry.montant), 42, y);
+          doc.text(entry.solde ? String(entry.solde) : '', 67, y);
+          doc.text(String(entry.debut || ''), 95, y);
+          doc.text(String(entry.fin || ''), 130, y);
+          doc.text(String(entry.paiement || ''), 165, y);
+          doc.text(String(entry.utilisateur || ''), 185, y);
+          y += 6;
+        });
+        y += 4;
+        doc.line(10, y, 210, y);
+        y += 6;
+      }
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text("RÉSUMÉ FINANCIER", 10, y);
+        y += 6;
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text("Revenus Heure :", 10, y);
+        doc.text(String(pdfData.hourIncome), 55, y, { align: "right" });
+        y += 6;
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text("Revenus Nuitée :", 10, y);
+        doc.text(String(pdfData.nightIncome), 55, y, { align: "right" });
+        y += 6;
+       
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text("Revenus Journée :", 10, y);
+        // Affiche le(s) utilisateur(s) ayant créé le revenu caisse
+        let caisseUsers = entries.map(en => en.createdBy?.username).filter(Boolean);
+        let caisseUserText = caisseUsers.length > 0 ? `par ${caisseUsers.join(', ')}` : '';
+        doc.text(`${pdfData.caisse} ${caisseUserText}`, 76, y, { align: "right" });
+        y += 6;
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text("Total Séjours :", 10, y);
+        doc.text(String(pdfData.income), 55, y, { align: "right" });
+        y += 6;
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text("Dépenses :", 10, y);
+        doc.text(String(pdfData.expenses), 55, y, { align: "right" });
+        y += 6;
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text("Solde :", 10, y);
+        doc.text(String(pdfData.remaining), 55, y, { align: "right" });
+        y += 10;
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text("ACTIVITÉ HÔTELIÈRE", 10, y);
+        y += 6;
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text("Nombre total de séjours :", 10, y);
+        doc.text(String(pdfData.totalStays), 55, y, { align: "right" });
+        y += 6;
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text("Nombre de nuitées :", 10, y);
+        doc.text(String(pdfData.nightStays), 55, y, { align: "right" });
+        y += 6;
+        
+      // Pied de page supprimé comme demandé
+    }
+    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="releve-${date}.pdf"`
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="releve-multi-jour.pdf"`);
     res.send(pdfBuffer);
   } catch (err) {
     console.error("exportDailyPDF error:", err);
@@ -604,47 +804,80 @@ exports.exportWeeklyPDF = async (req, res) => {
     const lastWeek = new Date();
     lastWeek.setDate(today.getDate() - 6);
 
+    const { generateWeeklyPDF, generateWeeklyPDFDetailed } = require('../utils/generatePDF');
+    const mode = req.query.mode || 'details'; // 'summary', 'details', 'both'
+    console.log('=== Paramètre mode reçu pour exportWeeklyPDF ===', mode);
     const result = [];
 
     for (let i = 0; i < 7; i++) {
       const refDate = new Date(lastWeek);
       refDate.setDate(lastWeek.getDate() + i);
-
       const { start, end } = getWorkdayRange(refDate);
 
-      const stays = await Stay.find({ startTime: { $gte: start, $lt: end } });
+      // On récupère les séjours avec infos chambre et utilisateur
+      const stays = await Stay.find({ startTime: { $gte: start, $lt: end } })
+        .populate('roomId')
+        .populate('createdBy');
       const expenses = await Expense.find({ date: { $gte: start, $lt: end } });
-      const entries = await Entry.find({ date: { $gte: start, $lt: end } });
 
-      const hourIncome = stays
-        .filter(s => s.phase === "hour")
-        .reduce((sum, s) => sum + (s.amount || 0), 0);
+      // On ne garde le jour que s'il y a au moins un séjour ou une dépense
+      if (stays.length === 0 && expenses.length === 0) continue;
 
-      const nightIncome = stays
-        .filter(s => s.phase === "night")
-        .reduce((sum, s) => sum + (s.amount || 0), 0);
+      // Construction des entrées détaillées (tableau)
+      const dayEntries = [];
+      stays.forEach(s => {
+        dayEntries.push({
+          chambre: s.roomId?.number || '',
+          type: s.phase === 'hour' ? 'Heure' : 'Nuitée',
+          montant: s.amount || 0,
+          solde: s.amount || 0,
+          debut: s.startTime ? s.startTime.toLocaleString('fr-FR') : '',
+          fin: s.endTime ? s.endTime.toLocaleString('fr-FR') : '',
+          paiement: s.paymentMethod || '',
+          utilisateur: s.createdBy?.username || ''
+        });
+      });
+      expenses.forEach(e => {
+        dayEntries.push({
+          chambre: '',
+          type: 'Dépense',
+          montant: e.amount || 0,
+          solde: '',
+          debut: e.date ? e.date.toLocaleString('fr-FR') : '',
+          fin: '',
+          paiement: '',
+          utilisateur: ''
+        });
+      });
 
-      const entriesIncome = entries.reduce(
-        (sum, e) => sum + (e.totalIncome || 0),
-        0
-      );
-
-      const totalIncome = hourIncome + nightIncome + entriesIncome;
-
-      const totalExpenses = expenses.reduce(
-        (sum, e) => sum + (e.amount || 0),
-        0
-      );
+      const totalIncome = stays.reduce((sum, s) => sum + (s.amount || 0), 0);
+      const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
       result.push({
         date: start.toLocaleDateString("fr-FR"),
         income: totalIncome,
         expenses: totalExpenses,
-        remaining: totalIncome - totalExpenses
+        remaining: totalIncome - totalExpenses,
+        totalStays: stays.length,
+        nightStays: stays.filter(s => s.phase === "night").length,
+        entries: dayEntries
       });
     }
 
-    const pdfBuffer = generateWeeklyPDF(result);
+    console.log('=== Données export hebdo ===');
+    console.dir(result, { depth: 5 });
+
+    let pdfBuffer;
+    if (mode === 'summary') {
+      pdfBuffer = generateWeeklyPDF(result);
+    } else if (mode === 'details') {
+      pdfBuffer = generateWeeklyPDFDetailed(result, false); // pas de résumé à la fin
+    } else if (mode === 'both') {
+      // Détail AVEC résumé à la fin (comportement par défaut)
+      pdfBuffer = generateWeeklyPDFDetailed(result, true);
+    } else {
+      pdfBuffer = generateWeeklyPDFDetailed(result, false);
+    }
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -662,7 +895,7 @@ exports.exportWeeklyPDF = async (req, res) => {
 // === PDF MENSUEL (chaque jour de 8h→8h) ===
 exports.exportMonthlyPDF = async (req, res) => {
   try {
-    const { month, year } = req.query;
+    const { month, year, mode } = req.query;
     const daysInMonth = new Date(year, month, 0).getDate();
     const data = [];
 
@@ -670,41 +903,67 @@ exports.exportMonthlyPDF = async (req, res) => {
       const refDate = new Date(year, month - 1, d);
       const { start, end } = getWorkdayRange(refDate);
 
-      const stays = await Stay.find({ startTime: { $gte: start, $lt: end } });
+      const stays = await Stay.find({ startTime: { $gte: start, $lt: end } }).populate('roomId').populate('createdBy');
       const expenses = await Expense.find({ date: { $gte: start, $lt: end } });
       const entries = await Entry.find({ date: { $gte: start, $lt: end } });
 
       // === REVENUS ===
-      const hourIncome = stays
-        .filter(s => s.phase === "hour")
-        .reduce((sum, s) => sum + (s.amount || 0), 0);
-
-      const nightIncome = stays
-        .filter(s => s.phase === "night")
-        .reduce((sum, s) => sum + (s.amount || 0), 0);
-
-      const entriesIncome = entries.reduce(
-        (sum, e) => sum + (e.totalIncome || 0),
-        0
-      );
-
+      const hourIncome = stays.filter(s => s.phase === "hour").reduce((sum, s) => sum + (s.amount || 0), 0);
+      const nightIncome = stays.filter(s => s.phase === "night").reduce((sum, s) => sum + (s.amount || 0), 0);
+      const entriesIncome = entries.reduce((sum, e) => sum + (e.totalIncome || 0), 0);
       const totalIncome = hourIncome + nightIncome + entriesIncome;
 
       // === DÉPENSES ===
-      const totalExpenses = expenses.reduce(
-        (sum, e) => sum + (e.amount || 0),
-        0
-      );
+      const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+      // Détail des entrées pour chaque jour
+      const dayEntries = [];
+      stays.forEach(s => {
+        dayEntries.push({
+          chambre: s.roomId?.number || '',
+          type: s.phase === 'hour' ? 'Heure' : 'Nuitée',
+          montant: s.amount || 0,
+          solde: s.amount || 0,
+          debut: s.startTime ? s.startTime.toLocaleString('fr-FR') : '',
+          fin: s.endTime ? s.endTime.toLocaleString('fr-FR') : '',
+          paiement: s.paymentMethod || '',
+          utilisateur: s.createdBy?.username || ''
+        });
+      });
+      expenses.forEach(e => {
+        dayEntries.push({
+          chambre: '',
+          type: 'Dépense',
+          montant: e.amount || 0,
+          solde: '',
+          debut: e.date ? e.date.toLocaleString('fr-FR') : '',
+          fin: '',
+          paiement: '',
+          utilisateur: ''
+        });
+      });
 
       data.push({
         date: `${d}/${month}`,
         income: totalIncome,
         expenses: totalExpenses,
-        remaining: totalIncome - totalExpenses
+        remaining: totalIncome - totalExpenses,
+        totalStays: stays.length,
+        nightStays: stays.filter(s => s.phase === "night").length,
+        entries: dayEntries
       });
     }
 
-    const pdfBuffer = generateMonthlyPDF(data, month, year);
+    let pdfBuffer;
+    if (mode === 'summary') {
+      pdfBuffer = generateMonthlyPDF(data, month, year);
+    } else if (mode === 'details') {
+      pdfBuffer = generateMonthlyPDFDetailed(data, month, year, false);
+    } else if (mode === 'both') {
+      pdfBuffer = generateMonthlyPDFDetailed(data, month, year, true);
+    } else {
+      pdfBuffer = generateMonthlyPDFDetailed(data, month, year, true);
+    }
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -716,54 +975,97 @@ exports.exportMonthlyPDF = async (req, res) => {
     console.error("exportMonthlyPDF error:", err);
     res.status(500).send("Erreur export PDF mensuel");
   }
-};
+}
 
 
 // === PDF ANNUEL (chaque jour de 8h→8h sur le mois) ===
 exports.exportAnnualPDF = async (req, res) => {
   try {
-    const { year } = req.query;
+    const { year, mode } = req.query;
     const result = [];
 
     for (let m = 0; m < 12; m++) {
       const start = new Date(year, m, 1, 8, 0, 0, 0);
       const end = new Date(year, m + 1, 1, 8, 0, 0, 0);
 
-      const stays = await Stay.find({ startTime: { $gte: start, $lt: end } });
+      const stays = await Stay.find({ startTime: { $gte: start, $lt: end } }).populate('roomId').populate('createdBy');
       const expenses = await Expense.find({ date: { $gte: start, $lt: end } });
       const entries = await Entry.find({ date: { $gte: start, $lt: end } });
 
       // === REVENUS ===
-      const hourIncome = stays
-        .filter(s => s.phase === "hour")
-        .reduce((sum, s) => sum + (s.amount || 0), 0);
-
-      const nightIncome = stays
-        .filter(s => s.phase === "night")
-        .reduce((sum, s) => sum + (s.amount || 0), 0);
-
-      const entriesIncome = entries.reduce(
-        (sum, e) => sum + (e.totalIncome || 0),
-        0
-      );
-
+      const hourIncome = stays.filter(s => s.phase === "hour").reduce((sum, s) => sum + (s.amount || 0), 0);
+      const nightIncome = stays.filter(s => s.phase === "night").reduce((sum, s) => sum + (s.amount || 0), 0);
+      const entriesIncome = entries.reduce((sum, e) => sum + (e.totalIncome || 0), 0);
       const totalIncome = hourIncome + nightIncome + entriesIncome;
 
       // === DÉPENSES ===
-      const totalExpenses = expenses.reduce(
-        (sum, e) => sum + (e.amount || 0),
-        0
-      );
+      const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+      // Détail des entrées pour chaque jour du mois
+      const daysInMonth = new Date(year, m + 1, 0).getDate();
+      const days = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const refDate = new Date(year, m, d);
+        const { start: dayStart, end: dayEnd } = getWorkdayRange(refDate);
+        const dayStays = stays.filter(s => s.startTime >= dayStart && s.startTime < dayEnd);
+        const dayExpenses = expenses.filter(e => e.date >= dayStart && e.date < dayEnd);
+        const dayEntries = [];
+        dayStays.forEach(s => {
+          dayEntries.push({
+            chambre: s.roomId?.number || '',
+            type: s.phase === 'hour' ? 'Heure' : 'Nuitée',
+            montant: s.amount || 0,
+            solde: s.amount || 0,
+            debut: s.startTime ? s.startTime.toLocaleString('fr-FR') : '',
+            fin: s.endTime ? s.endTime.toLocaleString('fr-FR') : '',
+            paiement: s.paymentMethod || '',
+            utilisateur: s.createdBy?.username || ''
+          });
+        });
+        dayExpenses.forEach(e => {
+          dayEntries.push({
+            chambre: '',
+            type: 'Dépense',
+            montant: e.amount || 0,
+            solde: '',
+            debut: e.date ? e.date.toLocaleString('fr-FR') : '',
+            fin: '',
+            paiement: '',
+            utilisateur: ''
+          });
+        });
+        days.push({
+          date: `${d}/${m + 1}`,
+          income: dayStays.reduce((sum, s) => sum + (s.amount || 0), 0) + dayEntries.reduce((sum, e) => sum + (e.totalIncome || 0), 0),
+          expenses: dayExpenses.reduce((sum, e) => sum + (e.amount || 0), 0),
+          remaining: dayStays.reduce((sum, s) => sum + (s.amount || 0), 0) + dayEntries.reduce((sum, e) => sum + (e.totalIncome || 0), 0) - dayExpenses.reduce((sum, e) => sum + (e.amount || 0), 0),
+          totalStays: dayStays.length,
+          nightStays: dayStays.filter(s => s.phase === "night").length,
+          entries: dayEntries
+        });
+      }
 
       result.push({
         label: start.toLocaleString("fr-FR", { month: "long" }),
         income: totalIncome,
         expenses: totalExpenses,
-        remaining: totalIncome - totalExpenses
+        remaining: totalIncome - totalExpenses,
+        totalStays: stays.length,
+        nightStays: stays.filter(s => s.phase === "night").length,
+        days
       });
     }
 
-    const pdfBuffer = generateAnnualPDF(result, year);
+    let pdfBuffer;
+    if (mode === 'summary') {
+      pdfBuffer = generateAnnualPDF(result, year);
+    } else if (mode === 'details') {
+      pdfBuffer = generateAnnualPDFDetailed(result, year, false);
+    } else if (mode === 'both') {
+      pdfBuffer = generateAnnualPDFDetailed(result, year, true);
+    } else {
+      pdfBuffer = generateAnnualPDFDetailed(result, year, true);
+    }
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -775,7 +1077,7 @@ exports.exportAnnualPDF = async (req, res) => {
     console.error("exportAnnualPDF error:", err);
     res.status(500).send("Erreur export PDF annuel");
   }
-};
+}
 
 
 

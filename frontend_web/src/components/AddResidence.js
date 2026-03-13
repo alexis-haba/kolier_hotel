@@ -36,7 +36,7 @@ const AddResidence = () => {
 
     try {
       setLoading(true);
-      const res = await api.post('/residences', { name, link });
+      await api.post('/residences', { name, link });
 
       alert("Résidence ajoutée !");
       navigate('/residences');

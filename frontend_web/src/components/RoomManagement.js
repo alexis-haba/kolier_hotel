@@ -54,40 +54,51 @@ const RoomManagement = () => {
     <div className="p-4">
       <h2 className="h4 mb-4">Gestion des Chambres</h2>
       <form onSubmit={handleSubmit} className="mb-4">
-        <input
-          value={form.number}
-          onChange={(e) => setForm({ ...form, number: e.target.value })}
-          placeholder="Numéro de chambre"
-          className="form-control d-inline-block w-auto me-2"
-        />
- 
-        <button type="submit" className="btn btn-primary">
-          {editingId ? 'Mettre à jour' : 'Ajouter'}
-        </button>
+        <div className="row g-2 align-items-end">
+          <div className="col-12 col-md-8">
+            <input
+              value={form.number}
+              onChange={(e) => setForm({ ...form, number: e.target.value })}
+              placeholder="Numéro de chambre"
+              className="form-control"
+            />
+          </div>
+
+          <div className="col-12 col-md-4">
+            <button type="submit" className="btn btn-primary w-100">
+              {editingId ? 'Mettre à jour' : 'Ajouter'}
+            </button>
+          </div>
+        </div>
       </form>
-      <table className="table table-bordered">
-        <thead>
-          <tr>
-            <th>Numéro</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rooms.map((room) => (
-            <tr key={room._id}>
-              <td>{room.number}</td>
-              <td>
-                <button onClick={() => handleEdit(room)} className="btn btn-primary me-2">
-                  Éditer
-                </button>
-                <button onClick={() => handleDelete(room._id)} className="btn btn-danger">
-                  Supprimer
-                </button>
-              </td>
+
+      <div className="table-responsive">
+        <table className="table table-bordered align-middle">
+          <thead>
+            <tr>
+              <th>Numéro</th>
+              <th>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rooms.map((room) => (
+              <tr key={room._id}>
+                <td>{room.number}</td>
+                <td>
+                  <div className="d-flex flex-wrap gap-2">
+                    <button onClick={() => handleEdit(room)} className="btn btn-primary btn-sm">
+                      Éditer
+                    </button>
+                    <button onClick={() => handleDelete(room._id)} className="btn btn-danger btn-sm">
+                      Supprimer
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

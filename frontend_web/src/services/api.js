@@ -1,7 +1,11 @@
 import axios from 'axios';
 
-// On lit la variable d'environnement définie dans .env ou Render
-const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
+// URL API: .env prioritaire, sinon auto-détection LAN (utile quand le site est ouvert depuis un téléphone)
+const browserHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const fallbackApiUrl = browserHost && browserHost !== 'localhost'
+  ? `http://${browserHost}:5000`
+  : 'http://localhost:5000';
+const apiUrl = process.env.REACT_APP_API_URL || fallbackApiUrl;
 
 const api = axios.create({
   baseURL: `${apiUrl}/api`,
@@ -14,7 +18,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
       console.log(
-        '➡️ Requête envoyée:',
+        ' Requête envoyée:',
         config.method?.toUpperCase(),
         config.url
       );
@@ -28,7 +32,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     console.log(
-      '✅ Réponse:',
+      'Réponse:',
       response.config.url,
       'Status:',
       response.status
@@ -57,9 +61,9 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // ❌ AUTRES ERREURS
+    // AUTRES ERREURS
     console.error(
-      '❌ Erreur API:',
+      'Erreur API:',
       error.message,
       'URL:',
       error.config?.url,

@@ -1,25 +1,32 @@
 import React, { useState } from 'react';
-import api from '../services/api';
+import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
-const Login = ({ setIsAuthenticated }) => {
+const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
 
     try {
-      // === Login ===
-      const res = await api.post('/auth/login', { username, password });
-      const token = res.data.token;
-      localStorage.setItem('token', token);
-      if (setIsAuthenticated) setIsAuthenticated(true);
+      // === Connexion ===
+      const result = await login(username, password);
+      
+      if (!result.success) {
+        setErrorMessage(result.error || 'Erreur de connexion');
+        return;
+      }
 
-      // === Vérifier les résidences existantes ===
+      // === Récupérer les résidences ===
+      const token = localStorage.getItem('token');
       const resRes = await api.get('/residences', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -30,26 +37,30 @@ const Login = ({ setIsAuthenticated }) => {
       residences.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       const residenceMere = residences[0] || null;
 
-      // === Toujours sauvegarder la résidence mère dans localStorage ===
+      // === Sauvegarder la résidence mère ===
       if (residenceMere) {
         localStorage.setItem("currentResidence", JSON.stringify(residenceMere));
       } else {
         localStorage.removeItem("currentResidence");
       }
 
-      // === Redirection selon les règles ===
+      // === Redirection ===
       if (!residenceMere) {
-        window.location.href = '/';           // Dashboard si pas de résidence
+        navigate('/');
       } else {
-        window.location.href = '/residences'; // Liste des résidences
+        navigate('/residences');
       }
 
     } catch (err) {
       console.error('Erreur login:', err);
-      if (err.response && err.response.status === 429) {
-        setErrorMessage('Trop de tentatives. Veuillez réessayer après 15 minutes.');
-      } else {
+      if (!err.response) {
+        setErrorMessage('Serveur inaccessible. Vérifiez la connexion et la configuration du backend.');
+      } else if (err.response.status === 429) {
+        setErrorMessage('Trop de tentatives. Réessayez après 15 minutes.');
+      } else if (err.response.status === 401) {
         setErrorMessage('Identifiants invalides');
+      } else {
+        setErrorMessage(err.response?.data?.msg || 'Erreur de connexion');
       }
     }
   };

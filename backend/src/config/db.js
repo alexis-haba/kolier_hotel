@@ -1,22 +1,34 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
+const { getMongoUri } = require("./mongoUri");
 
 const connectDB = async () => {
-  if (!process.env.MONGO_URI) {
-    console.error("❌ MONGO_URI non défini !");
+  const uri = getMongoUri();
+  if (!uri) {
+    console.error("MONGO_URI non défini !");
+    process.exit(1);
+  }
+
+  const hasPlaceholderCredentials =
+    uri.includes("USER:") || uri.includes(":PASS@") || uri.includes("<password>");
+
+  if (hasPlaceholderCredentials) {
+    console.error(
+      "MONGO_URI invalide: remplace USER/PASS par tes vrais identifiants MongoDB Atlas (mot de passe URL-encodé)."
+    );
     process.exit(1);
   }
 
   try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      ssl: true,
-      serverSelectionTimeoutMS: 30000, // 30s
-      connectTimeoutMS: 30000,         // 30s
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 30000,
+      connectTimeoutMS: 30000,
+      family: 4,
     });
-    console.log("✅ MongoDB Connected");
+
+    console.log("MongoDB Connected (SRV direct)");
   } catch (err) {
-    console.error("❌ Erreur MongoDB :", err.message);
+    console.error("Erreur MongoDB :", err.message);
+    console.error("Détails :", err);
     process.exit(1);
   }
 };

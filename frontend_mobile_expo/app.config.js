@@ -1,4 +1,7 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+
+const envPath = process.env.APP_ENV === 'production' ? '.env.production' : '.env.local';
+dotenv.config({ path: envPath });
 
 export default {
   expo: {

@@ -1,18 +1,18 @@
 const DailyEntry = require('../models/DailyEntry');
 const Stay = require('../models/Stay');
-const AuditLog = require('../models/AuditLog'); // ✅ journalisation (optionnelle mais utile)
+const AuditLog = require('../models/AuditLog'); // journalisation (optionnelle mais utile)
 
 // 📌 Créer une nouvelle entrée
 exports.createEntry = async (req, res) => {
   try {
     const { phase, stays = [], expenses = [], notes, totalIncome } = req.body;
 
-    // ✅ Vérifier la phase (obligatoire)
+    // Vérifier la phase (obligatoire)
     if (!phase || !["day", "night"].includes(phase)) {
       return res.status(400).json({ message: "Le champ 'phase' est requis et doit être 'day' ou 'night'." });
     }
 
-    // ✅ Calcul automatique des totaux
+    // Calcul automatique des totaux
     let calculatedIncome;
     if (phase === "day") {
       calculatedIncome = Number(totalIncome) || 0;
@@ -34,7 +34,7 @@ exports.createEntry = async (req, res) => {
       createdBy: req.user?.id || null,
     });
 
-    // ✅ Audit log
+    // Audit log
     await AuditLog.create({
       action: "create_entry",
       userId: req.user?.id,
@@ -107,13 +107,13 @@ exports.updateEntry = async (req, res) => {
       return res.status(404).json({ message: 'Entrée non trouvée' });
     }
 
-    // ✅ Mise à jour des champs fournis
+    // Mise à jour des champs fournis
     if (phase) entry.phase = phase;
     if (notes !== undefined) entry.notes = notes;
     if (stays !== undefined) entry.stays = stays;
     if (expenses !== undefined) entry.expenses = expenses;
 
-    // ✅ Recalcul automatique des totaux
+    // Recalcul automatique des totaux
     let calculatedIncome = totalIncome;
     if (entry.phase === "night" && stays?.length) {
       const linkedStays = await Stay.find({ _id: { $in: stays } });
@@ -124,7 +124,7 @@ exports.updateEntry = async (req, res) => {
 
     await entry.save();
 
-    // ✅ Audit log
+    // Audit log
     await AuditLog.create({
       action: "update_entry",
       userId: req.user?.id,
@@ -145,7 +145,7 @@ exports.deleteEntry = async (req, res) => {
       return res.status(404).json({ message: 'Entrée non trouvée' });
     }
 
-    // ✅ Audit log
+    // Audit log
     await AuditLog.create({
       action: "delete_entry",
       userId: req.user?.id,

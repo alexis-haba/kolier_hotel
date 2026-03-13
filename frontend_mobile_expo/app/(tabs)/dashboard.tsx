@@ -58,7 +58,7 @@ export default function Dashboard() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // ✅ Adapter au nouveau format du back
+      // Adapter au nouveau format du back
       setTotals({
         totalEntries: data.totals?.totalIncome ?? 0,
         totalExpenses: data.totals?.totalExpenses ?? 0,
@@ -129,7 +129,7 @@ export default function Dashboard() {
         <Text style={TYPO.money}>{safeFormat(totals.balance)} FG</Text>
       </View>
 
-      {/* ✅ Détail des revenus */}
+      {/* Détail des revenus */}
       <View style={styles.row}>
         <View style={styles.card}>
           <Text style={TYPO.p}>La Journée</Text>
@@ -151,7 +151,7 @@ export default function Dashboard() {
 
 
 
-      {/* ✅ Liste des séjours */}
+      {/* Liste des séjours */}
       <View style={styles.card}>
         <Text style={[TYPO.h2, { marginBottom: 8 }]}>
           Séjours du jour ({stays.length})
@@ -194,7 +194,7 @@ export default function Dashboard() {
         )}
       </View>
 
-      {/* ✅ Liste des dépenses */}
+      {/* Liste des dépenses */}
       <View style={styles.card}>
         <Text style={[TYPO.h2, { marginBottom: 8 }]}>
           Dépenses du jour ({expenses.length})

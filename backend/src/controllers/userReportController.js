@@ -43,7 +43,7 @@ exports.getUserDailySummary = async (req, res) => {
     const totalExpenses = stayExpenses + entriesExpenses + otherExpenses;
     const remaining = totalIncome - totalExpenses;
 
-    // ✅ Réponse structurée
+    // Réponse structurée
     res.json({
       range: { start, end },
       totals: {

@@ -6,12 +6,11 @@ import api from '../services/api';
 import StayList from './StayList';
 import ExpenseList from './ExpenseList';
 import Filters from './Filters';
-import jsPDF from 'jspdf';
 import { 
-  FaSun, FaMoon, FaBalanceScale, FaFilePdf, FaFileExcel, 
-  FaPrint, FaChartBar, FaCalendarAlt 
+  FaBalanceScale, FaFilePdf,
+  FaChartBar, FaCalendarAlt 
 } from 'react-icons/fa';
-
+import DatePicker from "react-multi-date-picker";
 ChartJS.register(BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend);
 
 const Dashboard = () => {
@@ -34,6 +33,28 @@ const Dashboard = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [quickRange, setQuickRange] = useState('today');
+  const [showAllKpis, setShowAllKpis] = useState(false);
+
+  const [monthlyWordMode, setMonthlyWordMode] = useState('details');
+  const [annualWordMode, setAnnualWordMode] = useState('details');
+  const [weeklyPdfMode, setWeeklyPdfMode] = useState('details');
+  const [weeklyWordMode, setWeeklyWordMode] = useState('details');
+  const [monthlyPdfMode, setMonthlyPdfMode] = useState('details');
+  const [annualPdfMode, setAnnualPdfMode] = useState('details');
+
+  const [showPdfExportModal, setShowPdfExportModal] = useState(false);
+  const [pdfExportDate, setPdfExportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [pdfExportType, setPdfExportType] = useState('day');
+  const [pdfExportDates, setPdfExportDates] = useState([new Date().toISOString().split('T')[0]]);
+
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportType, setExportType] = useState('daily');
+  const [exportFormat, setExportFormat] = useState('summary');
+  const [selectedDates, setSelectedDates] = useState([]);
+  const [selectedWeeks, setSelectedWeeks] = useState([]);
+  const [selectedMonths, setSelectedMonths] = useState([]);
+  const [selectedYears, setSelectedYears] = useState([]);
 
   // ================== HELPERS ==================
   const currentDate = new Date();
@@ -42,19 +63,35 @@ const Dashboard = () => {
     if (selectedDate.toDateString() === currentDate.toDateString()) {
       return <span className="badge bg-success">Aujourd'hui: {selectedDate.toLocaleDateString('fr-FR')}</span>;
     } else if (selectedDate < currentDate) {
-      return <span className="badge bg-warning">Date passée: {selectedDate.toLocaleDateString('fr-FR')}</span>;
+      return (
+        <span
+          className="badge"
+          style={{ backgroundColor: '#f4e7b2', color: '#5a4a0a', fontSize: '0.72rem' }}
+        >
+          Date passée: {selectedDate.toLocaleDateString('fr-FR')}
+        </span>
+      );
     } else {
       return <span className="badge bg-danger">Date future: {selectedDate.toLocaleDateString('fr-FR')}</span>;
     }
   };
 
-  const setToday = () => setFilters({ ...filters, date: new Date().toISOString().split('T')[0] });
+  // ================== FIX SCROLL DatePicker ==================
+  const lockScroll = () => { document.body.style.overflow = 'hidden'; };
+  const unlockScroll = () => { document.body.style.overflow = ''; };
+
+  const setToday = () => {
+    setQuickRange('today');
+    setFilters({ ...filters, date: new Date().toISOString().split('T')[0] });
+  };
   const setYesterday = () => {
+    setQuickRange('yesterday');
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     setFilters({ ...filters, date: yesterday.toISOString().split('T')[0] });
   };
   const setLastWeek = () => {
+    setQuickRange('lastWeek');
     const lastWeek = new Date();
     lastWeek.setDate(lastWeek.getDate() - 7);
     setFilters({ ...filters, date: lastWeek.toISOString().split('T')[0] });
@@ -109,18 +146,15 @@ const Dashboard = () => {
 
       const monthNames = ["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
 
-      // Prépare des tableaux remplis de 0
       const revenus = Array(12).fill(0);
       const depenses = Array(12).fill(0);
 
-      // Injecte les données reçues dans le bon mois
       graphRes.data.forEach(i => {
-        const idx = i.month - 1; // 0-based
+        const idx = i.month - 1;
         revenus[idx] = i.income || 0;
         depenses[idx] = i.expenses || 0;
       });
 
-      // Mets à jour le graphe avec les 12 mois
       setMonthData({
         labels: monthNames,
         datasets: [
@@ -161,19 +195,10 @@ const Dashboard = () => {
     fetchAnnualSummary();
   }, [fetchDailySummary, fetchWeeklySummary, fetchMonthlySummary, fetchAnnualSummary]);
 
-  // ================== PDF ==================
-  const printDailyReport = () => {
-    const doc = new jsPDF();
-    doc.text('Relevé Journalier', 10, 10);
-    doc.text(`Date: ${filters.date}`, 10, 20);
-    doc.text(`Séjours Heure: ${dailySummary.hourIncome || 0}`, 10, 30);
-    doc.text(`Séjours Nuit: ${dailySummary.nightIncome || 0}`, 10, 40);
-    doc.text(`Entrées Caisse: ${dailySummary.entriesIncome || 0}`, 10, 50);
-    doc.text(`Total: ${dailySummary.totalIncome || 0}`, 10, 60);
-    doc.text(`Dépenses: ${dailySummary.totalExpenses || 0}`, 10, 70);
-    doc.text(`Solde: ${dailySummary.remaining || 0}`, 10, 80);
-    doc.save(`releve-journalier-${filters.date}.pdf`);
-  };
+  // Nettoyage sécurité : déverrouillee le scroll si le composant est démonté
+  useEffect(() => {
+    return () => { document.body.style.overflow = ''; };
+  }, []);
 
   // ================== EXPORTS ==================
   const exportDailyPDF = async () => {
@@ -194,7 +219,7 @@ const Dashboard = () => {
 
   const exportWeeklyPDF = async () => {
     try {
-      const response = await api.get(`/reports/export/weekly`, { responseType: 'blob' });
+      const response = await api.get(`/reports/export/weekly?mode=${weeklyPdfMode}`, { responseType: 'blob' });
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = window.URL.createObjectURL(blob);
@@ -213,7 +238,7 @@ const Dashboard = () => {
       const today = new Date(filters.date);
       const month = today.getMonth() + 1;
       const year = today.getFullYear();
-      const response = await api.get(`/reports/export/monthly?month=${month}&year=${year}`, { responseType: 'blob' });
+      const response = await api.get(`/reports/export/monthly?month=${month}&year=${year}&mode=${monthlyPdfMode}`, { responseType: 'blob' });
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = window.URL.createObjectURL(blob);
@@ -230,7 +255,7 @@ const Dashboard = () => {
   const exportAnnualPDF = async () => {
     try {
       const year = new Date(filters.date).getFullYear();
-      const response = await api.get(`/reports/export/annual?year=${year}`, { responseType: 'blob' });
+      const response = await api.get(`/reports/export/annual?year=${year}&mode=${annualPdfMode}`, { responseType: 'blob' });
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = window.URL.createObjectURL(blob);
@@ -244,19 +269,67 @@ const Dashboard = () => {
     }
   };
 
-  const exportExcel = async () => {
+  const handlePdfExport = async () => {
+    setShowPdfExportModal(false);
     try {
-      const response = await api.get(`/reports/export/excel?date=${filters.date}`, { responseType: 'blob' });
-      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      for (const date of pdfExportDates) {
+        let url = '';
+        if (pdfExportType === 'day') {
+          url = `/reports/export/daily?date=${date}`;
+        } else if (pdfExportType === 'week') {
+          url = `/reports/export/weekly?date=${date}`;
+        } else if (pdfExportType === 'month') {
+          const d = new Date(date);
+          url = `/reports/export/monthly?month=${d.getMonth()+1}&year=${d.getFullYear()}`;
+        } else if (pdfExportType === 'year') {
+          const d = new Date(date);
+          url = `/reports/export/annual?year=${d.getFullYear()}`;
+        }
+        const response = await api.get(url, { responseType: 'blob' });
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        link.href = window.URL.createObjectURL(blob);
+        link.setAttribute('download', `rapport-${pdfExportType}-${date}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+    } catch (err) {
+      alert('Erreur export PDF');
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setShowExportModal(false);
+    unlockScroll(); // sécurité : déverrouiller le scroll à la fermeture du modal
+    try {
+      let url = '';
+      if (exportType === 'daily') {
+        url = `/reports/export/daily?dates=${selectedDates.join(',')}&mode=details`;
+      } else if (exportType === 'weekly') {
+        url = `/reports/export/weekly?week=${selectedWeeks[0]}&mode=${exportFormat}`;
+      } else if (exportType === 'monthly') {
+        const d = new Date(selectedMonths[0]);
+        url = `/reports/export/monthly?month=${d.getMonth()+1}&year=${d.getFullYear()}&mode=${exportFormat}`;
+      } else if (exportType === 'annual') {
+        url = `/reports/export/annual?year=${selectedYears[0]}&mode=${exportFormat}`;
+      }
+      const response = await api.get(url, { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = window.URL.createObjectURL(blob);
-      link.setAttribute('download', `releve-journalier-${filters.date}.xlsx`);
+      link.setAttribute('download', `rapport-${exportType}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
+      setSelectedDates([]);
+      setSelectedWeeks([]);
+      setSelectedMonths([]);
+      setSelectedYears([]);
+      setExportType('daily');
+      setExportFormat('summary');
     } catch (err) {
-      console.error("Erreur export Excel :", err);
-      alert("Impossible de télécharger le fichier Excel.");
+      alert('Erreur export PDF');
     }
   };
 
@@ -267,17 +340,33 @@ const Dashboard = () => {
     scales: { y: { beginAtZero: true } },
   };
 
+  const hasChartData = (datasets = []) =>
+    datasets.some((dataset) => (dataset.data || []).some((value) => Number(value || 0) > 0));
+
+  const chartHasWeeklyData = hasChartData(weekData.datasets);
+  const chartHasMonthlyData = hasChartData(monthData.datasets);
+  const chartHasAnnualData = hasChartData(annualData.datasets);
+
   // ================== RENDER ==================
   return (
-    <div className="p-4" style={{ backgroundColor: '#f9fafc', minHeight: '100vh' }}>
-      <h1 className="h2 mb-4">Tableau de bord Admin</h1>
+    <div className="dashboard-page p-3 p-md-4" style={{ backgroundColor: '#f9fafc', minHeight: '100vh' }}>
+      <h1 className="h2 mb-3">Tableau de bord Admin</h1>
 
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <Filters filters={filters} setFilters={setFilters}/>
-        <div className="btn-group">
-          <button onClick={setToday} className="btn btn-outline-primary"><FaCalendarAlt /> Aujourd'hui</button>
-          <button onClick={setYesterday} className="btn btn-outline-warning"><FaCalendarAlt /> Hier</button>
-          <button onClick={setLastWeek} className="btn btn-outline-info"><FaCalendarAlt /> Semaine passée</button>
+      <div className="sticky-top py-2" style={{ backgroundColor: '#f9fafc', zIndex: 1010 }}>
+        <div className="d-flex flex-column gap-2 mb-2">
+          <Filters filters={filters} setFilters={setFilters} />
+          <div className="row g-2" role="group" aria-label="Période rapide">
+            <div className="col-12 col-md-4">
+              <button onClick={setToday} className={`btn btn-sm py-2 w-100 ${quickRange === 'today' ? 'btn-primary' : 'btn-outline-primary'}`}><FaCalendarAlt /> Aujourd'hui</button>
+            </div>
+            <div className="col-12 col-md-4">
+              <button onClick={setYesterday} className={`btn btn-sm py-2 w-100 ${quickRange === 'yesterday' ? 'btn-warning text-dark' : 'btn-outline-warning'}`}><FaCalendarAlt /> Hier</button>
+            </div>
+            <div className="col-12 col-md-4">
+              <button onClick={setLastWeek} className={`btn btn-sm py-2 w-100 ${quickRange === 'lastWeek' ? 'btn-info text-dark' : 'btn-outline-info'}`}><FaCalendarAlt /> Semaine passée</button>
+            </div>
+          </div>
+          {loading && <div className="small text-muted">Mise à jour des données...</div>}
         </div>
       </div>
 
@@ -285,54 +374,373 @@ const Dashboard = () => {
       {loading && <div className="alert alert-info">Chargement en cours...</div>}
       {error && <div className="alert alert-danger">{error}</div>}
 
-      {/* Résumé Journalier */}
-      <div className="row g-3 mb-4">
-        <div className="col-md-4 col-lg-2"><div className="p-3 text-white rounded shadow-sm bg-primary"><FaSun /> Heure: {dailySummary.hourIncome}</div></div>
-        <div className="col-md-4 col-lg-2"><div className="p-3 text-white rounded shadow-sm bg-info"><FaMoon /> Nuitée: {dailySummary.nightIncome}</div></div>
-        <div className="col-md-4 col-lg-2"><div className="p-3 text-white rounded shadow-sm bg-secondary">☀️ Journée: {dailySummary.entriesIncome}</div></div>
-        <div className="col-md-4 col-lg-2"><div className="p-3 text-white rounded shadow-sm bg-primary">💰 Total: {dailySummary.totalIncome}</div></div>
-        <div className="col-md-4 col-lg-2"><div className="p-3 text-white rounded shadow-sm bg-danger">💸 Dépenses: {dailySummary.totalExpenses}</div></div>
-        <div className="col-md-4 col-lg-2"><div className="p-3 text-white rounded shadow-sm bg-success"><FaBalanceScale /> Solde: {dailySummary.remaining}</div></div>
-      </div>
+      {/* ================= Résumé Journalier ================= */}    
 
-      <StayList filters={filters} setFilters={setFilters} />
-      <ExpenseList filters={filters} />
-
-      {/* Actions */}
-      <div className="d-flex gap-3 mt-4 flex-wrap">
-        {/* <button onClick={printDailyReport} className="btn btn-outline-dark"><FaPrint /> Imprimer</button> */}
-        <button onClick={exportDailyPDF} className="btn btn-outline-primary"><FaFilePdf /> PDF Journalier</button>
-        <button onClick={exportWeeklyPDF} className="btn btn-outline-info"><FaFilePdf /> PDF Hebdomadaire</button>
-        <button onClick={exportMonthlyPDF} className="btn btn-outline-warning"><FaFilePdf /> PDF Mensuel</button>
-        <button onClick={exportAnnualPDF} className="btn btn-outline-success"><FaFilePdf /> PDF Annuel</button>
-        {/* <button onClick={exportExcel} className="btn btn-outline-success"><FaFileExcel /> Exporter Excel</button> */}
-      </div>
-
-      {/* Graphiques */}
-      <div className="mt-5 p-4 bg-white rounded shadow-sm border">
-        <h4><FaChartBar /> Graphique Hebdomadaire</h4>
-        <Bar data={weekData} options={{ ...chartOptions, title: { text: "Entrées / Dépenses de la Semaine" } }} />
-        {weeklySummary.length > 0 && (
-          <p>
-            Résumé Hebdomadaire: Revenus {weeklySummary.reduce((sum, i) => sum + (i.in || 0), 0)} 
-            - Dépenses {weeklySummary.reduce((sum, i) => sum + (i.out || 0), 0)} 
-            - Solde {weeklySummary.reduce((sum, i) => sum + (i.in || 0) - (i.out || 0), 0)}
-          </p>
-        )}
-      </div>
-
-      <div className="mt-5 p-4 bg-white rounded shadow-sm border">
-        <h4><FaChartBar /> Graphique Mensuel</h4>
-        <Bar data={monthData} options={{ ...chartOptions, title: { text: "Revenus / Dépenses Mensuels" } }} />
-        <p>Résumé Mensuel: Revenus {monthlySummary.income} - Dépenses {monthlySummary.expenses} - Solde {monthlySummary.remaining}</p>
-      </div>
-
-      <div className="mt-5 p-4 bg-white rounded shadow-sm border">
-        <h4><FaChartBar /> Graphique Annuel</h4>
-        <Bar data={annualData} options={{ ...chartOptions, title: { text: "Revenus / Dépenses Annuels" } }} />
-        <p>Résumé Annuel: Revenus {annualSummary.income} - Dépenses {annualSummary.expenses} - Solde {annualSummary.remaining}</p>
+  {/* Desktop / PC (lg+) */}
+  <div className="row g-2 mb-4 d-none d-lg-flex">
+    <div className="col-lg-2">
+      <div className="kpi-card p-2 text-white rounded shadow-sm bg-primary d-flex flex-column h-100">
+        <div className="small">⚙ Heure</div>
+        <div className="fw-bold fs-6 mt-1">{dailySummary.hourIncome || 0}</div>
       </div>
     </div>
+
+    <div className="col-lg-2">
+      <div className="kpi-card p-2 text-white rounded shadow-sm bg-info d-flex flex-column h-100">
+        <div className="small">🌙 Nuitée</div>
+        <div className="fw-bold fs-6 mt-1">{dailySummary.nightIncome || 0}</div>
+      </div>
+    </div>
+
+    <div className="col-lg-2">
+      <div className="kpi-card p-2 text-white rounded shadow-sm bg-secondary d-flex flex-column h-100">
+        <div className="small">☀ Journée</div>
+        <div className="fw-bold fs-6 mt-1">{dailySummary.entriesIncome || 0}</div>
+      </div>
+    </div>
+
+    <div className="col-lg-2">
+      <div className="kpi-card p-2 text-white rounded shadow-sm bg-primary d-flex flex-column h-100">
+        <div className="small">💰 Total</div>
+        <div className="fw-bold fs-6 mt-1">{dailySummary.totalIncome || 0}</div>
+      </div>
+    </div>
+
+    <div className="col-lg-2">
+      <div
+        className="kpi-card p-2 text-white rounded shadow-sm bg-danger d-flex flex-column h-100"
+        role="button"
+        onClick={() => (window.location.hash = '#expense-form')}
+        style={{ cursor: 'pointer' }}
+        aria-label="Aller au formulaire de dépense"
+      >
+        <div className="small">💸 Dépenses</div>
+        <div className="fw-bold fs-6 mt-1">{dailySummary.totalExpenses || 0}</div>
+      </div>
+    </div>
+
+    <div className="col-lg-2">
+      <div className="kpi-card p-2 text-white rounded shadow-sm bg-success d-flex flex-column h-100">
+        <div className="small"><FaBalanceScale /> Solde</div>
+        <div className="fw-bold fs-6 mt-1">{dailySummary.remaining || 0}</div>
+        <div className="small opacity-75 mt-1">Revenus – Dépenses</div>
+      </div>
+    </div>
+  </div>
+
+  {/* Mobile (xs/md) */}
+  <div className="row g-2 mb-4 d-lg-none">
+    <div className="col-6">
+      <div className="kpi-card p-2 text-white rounded shadow-sm bg-primary d-flex flex-column h-100">
+        <div className="small">⚙ Heure</div>
+        <div className="fw-bold fs-6 mt-1">{dailySummary.hourIncome || 0}</div>
+      </div>
+    </div>
+
+    <div className="col-6">
+      <div className="kpi-card p-2 text-white rounded shadow-sm bg-info d-flex flex-column h-100">
+        <div className="small">🌙 Nuitée</div>
+        <div className="fw-bold fs-6 mt-1">{dailySummary.nightIncome || 0}</div>
+      </div>
+    </div>
+
+    <div className="col-12">
+      <div className="kpi-card p-2 text-white rounded shadow-sm bg-secondary d-flex flex-column">
+        <div className="small">☀ Journée</div>
+        <div className="fw-bold fs-6 mt-1">{dailySummary.entriesIncome || 0}</div>
+      </div>
+    </div>
+
+    <div className="col-6 d-flex flex-column gap-2">
+      <div className="kpi-card p-2 text-white rounded shadow-sm bg-primary d-flex flex-column h-100">
+        <div className="small">💰 Total</div>
+        <div className="fw-bold fs-6 mt-1">
+          {dailySummary.totalIncome || 0}
+        </div>
+      </div>
+
+      <div className="kpi-card p-2 text-white rounded shadow-sm bg-success d-flex flex-column h-100">
+        <div className="small">
+          <FaBalanceScale /> Solde
+        </div>
+        <div className="fw-bold fs-6 mt-1">
+          {dailySummary.remaining || 0}
+        </div>
+        <div className="small opacity-75 mt-1">
+          Revenus – Dépenses
+        </div>
+      </div>
+    </div>
+
+    <div className="col-6">
+      <div
+        className="kpi-card p-2 text-white rounded shadow-sm bg-danger d-flex flex-column h-100"
+        role="button"
+        onClick={() => (window.location.hash = '#expense-form')}
+        style={{ cursor: 'pointer', minHeight: 110 }}
+        aria-label="Aller au formulaire de dépense"
+      >
+        <div className="small">💸 Dépenses</div>
+        <div className="fw-bold fs-6 mt-1">{dailySummary.totalExpenses || 0}</div>
+        <div className="small opacity-75">période sélectionnée</div>
+
+        <button
+          type="button"
+          className="btn btn-light btn-sm fw-semibold mt-auto"
+          style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
+          onClick={(event) => {
+            event.stopPropagation();
+            window.location.hash = '#expense-form';
+          }}
+        >
+          ➕ Dépense
+        </button>
+      </div>
+    </div>
+  </div>
+
+        <div className="d-lg-none mb-3">
+          <button className="btn btn-sm btn-outline-secondary w-100" onClick={() => setShowAllKpis((prev) => !prev)}>
+            {showAllKpis ? 'Masquer des indicateurs' : 'Voir tous les indicateurs'}
+          </button>
+        </div>
+
+        <StayList filters={filters} setFilters={setFilters} />
+        <ExpenseList filters={filters} />
+
+        {/* Actions */}
+        {/* Bouton Export PDF flottant desktop (web) */}
+        <button
+          type="button"
+          className="btn btn-success d-none d-lg-block position-fixed"
+          style={{ right: 16, bottom: 16, zIndex: 1030, borderRadius: 999 }}
+          onClick={() => setShowExportModal(true)}
+        >
+          📄 Export PDF
+        </button>
+
+        {/* Graphiques */}
+        <div className="mt-4">
+          <div className="bg-white rounded shadow-sm border mb-3">
+            <details open>
+              <summary
+                className="dashboard-toggle px-3 py-2 fw-semibold"
+                style={{ cursor: 'pointer', backgroundColor: '#f8f9fa' }}
+              >
+                <FaChartBar /> Graphique Hebdomadaire
+              </summary>
+              <div className="px-3 pb-3">
+                <p className="mb-2 small">
+                  Total revenus {weeklySummary.reduce((sum, i) => sum + (i.in || 0), 0)} - Dépenses {weeklySummary.reduce((sum, i) => sum + (i.out || 0), 0)} - Solde {weeklySummary.reduce((sum, i) => sum + (i.in || 0) - (i.out || 0), 0)}
+                </p>
+                {!chartHasWeeklyData ? (
+                  <div className="alert alert-light border mb-0">
+                    <p className="mb-2">Pas assez de données pour afficher le graphique.</p>
+                    <p className="small text-muted mb-2">Ajoutez au moins une dépense ou un séjour pour voir l'évolution.</p>
+                    <div className="d-flex flex-wrap gap-2">
+                      <button className="btn btn-sm btn-outline-primary" onClick={() => window.location.hash = '#expense-form'}>Ajouter une dépense</button>
+                      <button className="btn btn-sm btn-outline-secondary" onClick={setLastWeek}>Changer la période</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <div style={{ minWidth: 520 }}>
+                      <Bar data={weekData} options={{ ...chartOptions, title: { text: "Entrées / Dépenses de la Semaine" } }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </details>
+          </div>
+
+          <div className="bg-white rounded shadow-sm border mb-3">
+            <details>
+              <summary
+                className="dashboard-toggle px-3 py-2 fw-semibold"
+                style={{ cursor: 'pointer', backgroundColor: '#f8f9fa' }}
+              >
+                <FaChartBar /> Graphique Mensuel
+              </summary>
+              <div className="px-3 pb-3">
+                <p className="mb-2 small">Total revenus {monthlySummary.income || 0} - Dépenses {monthlySummary.expenses || 0} - Solde {monthlySummary.remaining || 0}</p>
+                {!chartHasMonthlyData ? (
+                  <div className="alert alert-light border mb-0">
+                    <p className="mb-2">Pas assez de données pour afficher le graphique.</p>
+                    <p className="small text-muted mb-2">Ajoutez au moins une dépense ou un séjour pour voir l'évolution.</p>
+                    <div className="d-flex flex-wrap gap-2">
+                      <button className="btn btn-sm btn-outline-primary" onClick={() => window.location.hash = '#expense-form'}>Ajouter une dépense</button>
+                      <button className="btn btn-sm btn-outline-secondary" onClick={setLastWeek}>Changer la période</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <div style={{ minWidth: 520 }}>
+                      <Bar data={monthData} options={{ ...chartOptions, title: { text: "Revenus / Dépenses Mensuels" } }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </details>
+          </div>
+
+          <div className="bg-white rounded shadow-sm border">
+            <details>
+              <summary
+                className="dashboard-toggle px-3 py-2 fw-semibold"
+                style={{ cursor: 'pointer', backgroundColor: '#f8f9fa' }}
+              >
+                <FaChartBar /> Graphique Annuel
+              </summary>
+              <div className="px-3 pb-3">
+                <p className="mb-2 small">Total revenus {annualSummary.income || 0} - Dépenses {annualSummary.expenses || 0} - Solde {annualSummary.remaining || 0}</p>
+                {!chartHasAnnualData ? (
+                  <div className="alert alert-light border mb-0">
+                    <p className="mb-2">Pas assez de données pour afficher le graphique.</p>
+                    <p className="small text-muted mb-2">Ajoutez au moins une dépense ou un séjour pour voir l'évolution.</p>
+                    <div className="d-flex flex-wrap gap-2">
+                      <button className="btn btn-sm btn-outline-primary" onClick={() => window.location.hash = '#expense-form'}>Ajouter une dépense</button>
+                      <button className="btn btn-sm btn-outline-secondary" onClick={setLastWeek}>Changer la période</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <div style={{ minWidth: 520 }}>
+                      <Bar data={annualData} options={{ ...chartOptions, title: { text: "Revenus / Dépenses Annuels" } }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </details>
+          </div>
+        </div>
+
+        {/* Bouton Export PDF flottant mobile */}
+        <button
+          type="button"
+          className="btn btn-success d-lg-none position-fixed"
+          style={{ left: 16, bottom: 16, zIndex: 1030, borderRadius: 999 }}
+          onClick={() => setShowExportModal(true)}
+        >
+          📄 Export PDF
+        </button>
+
+        <button
+          type="button"
+          className="btn btn-primary d-lg-none position-fixed"
+          style={{ right: 16, bottom: 16, zIndex: 1030, borderRadius: 999 }}
+          onClick={() => window.location.hash = '#expense-form'}
+        >
+          ➕ Dépense
+        </button>
+
+        {/* ================== Modal Export PDF ================== */}
+        {showExportModal && (
+          <div
+            className="modal show d-block"
+            tabIndex="-1"
+            style={{ background: 'rgba(0,0,0,0.3)' }}
+            onWheel={e => e.stopPropagation()}
+            onTouchMove={e => e.stopPropagation()}
+          >
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Exporter un rapport PDF</h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => { setShowExportModal(false); unlockScroll(); }}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <label className="form-label">Sélectionnez le format :</label>
+                  <select className="form-select mb-3" value={exportType} onChange={e => setExportType(e.target.value)}>
+                    <option value="daily">Jour(s)</option>
+                  </select>
+
+                  {(exportType === 'weekly' || exportType === 'monthly' || exportType === 'annual') && (
+                    <div className="mb-3">
+                      <label className="form-label">Format du rapport :</label>
+                      <select className="form-select" value={exportFormat} onChange={e => setExportFormat(e.target.value)}>
+                        <option value="summary">Résumé</option>
+                        <option value="details">Détails</option>
+                        <option value="both">Les deux</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <label className="form-label">Choisissez la/les date(s) :</label>
+
+                  {/* ===== FIX SCROLL : wrapper + fixMainPosition + lock/unlock ===== */}
+                  {exportType === 'daily' && (
+                    <div
+                      onWheel={e => e.stopPropagation()}
+                      onTouchMove={e => e.stopPropagation()}
+                    >
+                      <DatePicker
+                        multiple
+                        value={selectedDates}
+                        onChange={dates => setSelectedDates(dates.map(d => d.format("YYYY-MM-DD")))}
+                        format="YYYY-MM-DD"
+                        fixMainPosition
+                        onOpen={lockScroll}
+                        onClose={unlockScroll}
+                        className="mb-2"
+                      />
+                    </div>
+                  )}
+
+                  {exportType === 'weekly' && (
+                    <DatePicker
+                      multiple
+                      stayOpen
+                      value={selectedWeeks}
+                      onChange={weeks => setSelectedWeeks(weeks.map(w => w.format('YYYY-[W]WW')))}
+                      format="YYYY-[W]WW"
+                      weekPicker
+                      className="mb-2"
+                      fixMainPosition
+                      locale="fr"
+                    />
+                  )}
+                  {exportType === 'monthly' && (
+                    <input
+                      type="month"
+                      className="form-control mb-2"
+                      value={selectedMonths[0] || ''}
+                      onChange={e => setSelectedMonths([e.target.value])}
+                    />
+                  )}
+                  {exportType === 'annual' && (
+                    <select
+                      className="form-select mb-2"
+                      multiple
+                      value={selectedYears}
+                      onChange={e => setSelectedYears(Array.from(e.target.selectedOptions, o => o.value))}
+                    >
+                      {Array.from({ length: 10 }, (_, i) => (
+                        <option key={i} value={2026 - i}>{2026 - i}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => { setShowExportModal(false); unlockScroll(); }}
+                  >
+                    Annuler
+                  </button>
+                  <button type="button" className="btn btn-success" onClick={handleExportPDF}>
+                    Exporter
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
   );
 };
 

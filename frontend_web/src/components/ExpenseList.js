@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 
 const ExpenseList = ({ filters }) => {
@@ -6,12 +6,14 @@ const ExpenseList = ({ filters }) => {
   const [newExpense, setNewExpense] = useState({
     description: '',
     amount: '',
-    includeInDailyTotal: true, // ✅ Incluse dans le total par défaut
+    includeInDailyTotal: true, // Incluse dans le total par défaut
   });
   const [editingExpense, setEditingExpense] = useState(null);
   const [editForm, setEditForm] = useState({ description: '', amount: '' });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const quickDescriptions = ['Fournitures', 'Maintenance', 'Transport', 'Nettoyage'];
+  const amountInputRef = useRef(null);
 
   // === FETCH EXPENSES ===
   const fetchExpenses = useCallback(async () => {
@@ -20,7 +22,7 @@ const ExpenseList = ({ filters }) => {
       setExpenses(res.data);
     } catch (err) {
       console.error(err);
-      setMessage("❌ Erreur lors du chargement des dépenses");
+      setMessage("Erreur lors du chargement des dépenses");
     }
   }, [filters.date]);
 
@@ -38,21 +40,23 @@ const ExpenseList = ({ filters }) => {
 
     try {
       setLoading(true);
+      const numericAmount = Number(String(newExpense.amount).replace(/\s/g, ''));
       await api.post('/expenses', {
         expenses: [
           {
             description: newExpense.description,
-            amount: parseFloat(newExpense.amount),
-            includeInDailyTotal: newExpense.includeInDailyTotal, // ✅ envoyé au backend
+            amount: numericAmount,
+            includeInDailyTotal: newExpense.includeInDailyTotal, // envoyé au backend
           },
         ],
       });
-      setMessage("✅ Dépense ajoutée avec succès");
+      setMessage(`Dépense ajoutée – ${numericAmount.toLocaleString('fr-FR')} FG`);
       setNewExpense({ description: '', amount: '', includeInDailyTotal: true });
+      amountInputRef.current?.focus();
       fetchExpenses();
     } catch (err) {
       console.error(err);
-      setMessage("❌ Erreur lors de l’ajout de la dépense");
+      setMessage("Erreur lors de l’ajout de la dépense");
     } finally {
       setLoading(false);
     }
@@ -64,11 +68,11 @@ const ExpenseList = ({ filters }) => {
 
     try {
       await api.delete(`/expenses/${id}`);
-      setMessage("✅ Dépense supprimée avec succès");
+      setMessage("Dépense supprimée avec succès");
       fetchExpenses();
     } catch (err) {
       console.error(err);
-      setMessage("❌ Erreur lors de la suppression");
+      setMessage("Erreur lors de la suppression");
     }
   };
 
@@ -89,12 +93,12 @@ const ExpenseList = ({ filters }) => {
         description: editForm.description,
         amount: parseFloat(editForm.amount),
       });
-      setMessage("✅ Dépense mise à jour avec succès");
+      setMessage("Dépense mise à jour avec succès");
       setEditingExpense(null);
       fetchExpenses();
     } catch (err) {
       console.error(err);
-      setMessage("❌ Erreur lors de la mise à jour");
+      setMessage("Erreur lors de la mise à jour");
     } finally {
       setLoading(false);
     }
@@ -103,8 +107,14 @@ const ExpenseList = ({ filters }) => {
   // === CLOSE MODAL ===
   const closeModal = () => setEditingExpense(null);
 
+  const handleAmountChange = (value) => {
+    const digitsOnly = value.replace(/\D/g, '');
+    const formatted = digitsOnly ? Number(digitsOnly).toLocaleString('fr-FR') : '';
+    setNewExpense({ ...newExpense, amount: formatted });
+  };
+
   return (
-    <div>
+    <div id="expense-form">
       <h2 className="h4 mb-3">Gestion des Dépenses</h2>
 
       {message && <div className="alert alert-info py-2">{message}</div>}
@@ -113,7 +123,7 @@ const ExpenseList = ({ filters }) => {
       <form onSubmit={handleAddExpense} className="border rounded p-3 mb-4 bg-light">
         <h5 className="mb-3">Ajouter une nouvelle dépense</h5>
         <div className="row g-2 align-items-end">
-          <div className="col-md-5">
+          <div className="col-12 col-md-5">
             <label className="form-label">Description</label>
             <input
               type="text"
@@ -124,24 +134,39 @@ const ExpenseList = ({ filters }) => {
               }
               placeholder="Ex: Achat de fournitures"
             />
+            <div className="d-flex flex-wrap gap-2 mt-2">
+              {quickDescriptions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => {
+                    setNewExpense({ ...newExpense, description: item });
+                    amountInputRef.current?.focus();
+                  }}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="col-md-3">
+          <div className="col-12 col-md-4">
             <label className="form-label">Montant (FG)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               className="form-control"
+              ref={amountInputRef}
               value={newExpense.amount}
-              onChange={(e) =>
-                setNewExpense({ ...newExpense, amount: e.target.value })
-              }
-              placeholder="Ex: 50000"
+              onChange={(e) => handleAmountChange(e.target.value)}
+              placeholder="Ex: 50 000"
             />
+            <small className="text-muted">Format automatique en FG</small>
           </div>
 
-          
 
-          <div className="col-md-1">
+                    <div className="col-12 col-md-3">
             <button
               type="submit"
               className="btn btn-primary w-100"
@@ -155,41 +180,48 @@ const ExpenseList = ({ filters }) => {
 
       {/* === TABLEAU DES DÉPENSES === */}
       {expenses.length === 0 ? (
-        <p className="text-center text-muted">Aucune donnée pour cette période.</p>
+        <div className="alert alert-light border text-center">
+          <p className="mb-2">Aucune donnée pour cette période.</p>
+          <p className="small text-muted mb-0">Essayez Hier / Semaine passée ou ajoutez une dépense rapidement.</p>
+        </div>
       ) : (
-        <table className="table table-bordered align-middle">
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th>Montant</th>
-              <th>Date</th>
-              <th style={{ width: '150px' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {expenses.map((expense) => (
-              <tr key={expense._id}>
-                <td>{expense.description}</td>
-                <td>{expense.amount.toLocaleString('fr-FR')} FG</td>
-                <td>{new Date(expense.date).toLocaleString()}</td>
-                <td>
-                  <button
-                    className="btn btn-sm btn-warning me-2"
-                    onClick={() => openEditModal(expense)}
-                  >
-                    ✏️ Modifier
-                  </button>
-                  <button
-                    className="btn btn-sm btn-danger"
-                    onClick={() => handleDelete(expense._id)}
-                  >
-                    🗑️ Supprimer
-                  </button>
-                </td>
+        <div className="table-responsive">
+          <table className="table table-bordered align-middle">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Montant</th>
+                <th>Date</th>
+                <th style={{ width: '170px' }}>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {expenses.map((expense) => (
+                <tr key={expense._id}>
+                  <td>{expense.description}</td>
+                  <td>{expense.amount.toLocaleString('fr-FR')} FG</td>
+                  <td>{new Date(expense.date).toLocaleString()}</td>
+                  <td>
+                    <div className="d-flex flex-wrap gap-2">
+                      <button
+                        className="btn btn-sm btn-warning"
+                        onClick={() => openEditModal(expense)}
+                      >
+                        ✏️ Modifier
+                      </button>
+                      <button
+                        className="btn btn-sm btn-danger"
+                        onClick={() => handleDelete(expense._id)}
+                      >
+                        🗑️ Supprimer
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* === MODAL ÉDITION === */}

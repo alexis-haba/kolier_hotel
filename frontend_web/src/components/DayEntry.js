@@ -26,13 +26,13 @@ const DayEntry = ({ onSaved }) => {
       };
 
       await api.post('/entries', payload);
-      setMessage("✅ Saisie jour enregistrée");
+      setMessage("Saisie jour enregistrée");
       setAmount('');
       setExpenses([{ description: '', amount: '', includeInDailyTotal: true }]);
       if (onSaved) onSaved();
     } catch (err) {
       console.error(err.response?.data || err.message);
-      setMessage("❌ Erreur lors de l'enregistrement");
+      setMessage("Erreur lors de l'enregistrement");
     } finally {
       setLoading(false);
     }

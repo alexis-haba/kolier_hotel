@@ -112,71 +112,107 @@ const StayList = ({ filters, setFilters }) => {
       <h2 className="h4 mb-2">Liste des Séjours & Journées</h2>
 
       {/* 🔍 Filtres */}
-      <div className="d-flex gap-2 mb-3">
-        <select
-          value={filters.phase || ''}
-          onChange={(e) => setFilters({ ...filters, phase: e.target.value || undefined })}
-          className="form-select"
-          style={{ maxWidth: 160 }}
-        >
-          <option value="">Tous</option>
-          <option value="day">Journée</option>
-          <option value="hour">Heure</option>
-          <option value="night">Nuitée</option>
-        </select>
+      <div className="row g-2 mb-3">
+        <div className="col-12 col-md-3">
+          <select
+            value={filters.phase || ''}
+            onChange={(e) => setFilters({ ...filters, phase: e.target.value || undefined })}
+            className="form-select"
+          >
+            <option value="">Tous</option>
+            <option value="day">Journée</option>
+            <option value="hour">Heure</option>
+            <option value="night">Nuitée</option>
+          </select>
+        </div>
 
-        <input
-          type="date"
-          className="form-control"
-          value={filters.date || ''}
-          onChange={(e) => setFilters({ ...filters, date: e.target.value })}
-          style={{ maxWidth: 180 }}
-        />
+        <div className="col-12 col-md-3">
+          <input
+            type="date"
+            className="form-control"
+            value={filters.date || ''}
+            onChange={(e) => setFilters({ ...filters, date: e.target.value })}
+          />
+        </div>
 
-        <input
-          type="text"
-          className="form-control"
-          placeholder="Filtrer par ID chambre"
-          value={filters.roomId || ''}
-          onChange={(e) => setFilters({ ...filters, roomId: e.target.value })}
-          style={{ maxWidth: 220 }}
-        />
+        <div className="col-12 col-md-6">
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Filtrer par ID chambre"
+            value={filters.roomId || ''}
+            onChange={(e) => setFilters({ ...filters, roomId: e.target.value })}
+          />
+        </div>
       </div>
 
       {/* 🧾 Tableau des séjours */}
       {stays.length === 0 ? (
-        <p className="text-center text-muted">Aucune donnée pour cette période.</p>
+        <div className="alert alert-light border text-center">
+          <p className="mb-2">Aucune donnée pour cette période.</p>
+          <p className="small text-muted mb-3">Essayez Hier / Semaine passée ou sélectionnez une chambre.</p>
+          <div className="d-flex flex-wrap justify-content-center gap-2">
+            <button
+              className="btn btn-sm btn-outline-warning"
+              onClick={() => {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                setFilters({ ...filters, date: yesterday.toISOString().split('T')[0] });
+              }}
+            >
+              Voir Hier
+            </button>
+            <button
+              className="btn btn-sm btn-outline-info"
+              onClick={() => {
+                const lastWeek = new Date();
+                lastWeek.setDate(lastWeek.getDate() - 7);
+                setFilters({ ...filters, date: lastWeek.toISOString().split('T')[0] });
+              }}
+            >
+              Semaine passée
+            </button>
+            <button
+              className="btn btn-sm btn-outline-primary"
+              onClick={() => window.location.hash = '#expense-form'}
+            >
+              Créer une dépense
+            </button>
+          </div>
+        </div>
       ) : (
-        <table className="table table-bordered">
-          <thead>
-            <tr>
-              <th>Chambre</th>
-              <th>Type</th>
-              <th>Montant</th>
-              <th>Solde</th>
-              <th>Début</th>
-              <th>Fin</th>
-              <th>Paiement</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stays.map((stay) => (
-              <tr key={stay._id}>
-                <td>{stay.roomId?.number || (stay.phase === 'day' ? '—' : 'N/A')}</td>
-                <td>{stay.phase === 'night' ? 'Nuitée' : stay.phase === 'hour' ? 'Heure' : 'Entrée Caisse'}</td>
-                <td>{Number(stay.amount || 0).toLocaleString('fr-FR')} FG</td>
-                <td>{Number(stay.balance || 0).toLocaleString('fr-FR')} FG</td>
-                <td>{new Date(stay.startTime).toLocaleString()}</td>
-                <td>{stay.endTime ? new Date(stay.endTime).toLocaleString() : 'En cours'}</td>
-                <td>{stay.paymentMethod || '—'}</td>
-                <td>
-                  <Button size="sm" variant="info" onClick={() => handleShowModal(stay)}>Voir</Button>
-                </td>
+        <div className="table-responsive">
+          <table className="table table-bordered align-middle">
+            <thead>
+              <tr>
+                <th>Chambre</th>
+                <th>Type</th>
+                <th>Montant</th>
+                <th>Solde</th>
+                <th>Début</th>
+                <th>Fin</th>
+                <th>Paiement</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {stays.map((stay) => (
+                <tr key={stay._id}>
+                  <td>{stay.roomId?.number || (stay.phase === 'day' ? '—' : 'N/A')}</td>
+                  <td>{stay.phase === 'night' ? 'Nuitée' : stay.phase === 'hour' ? 'Heure' : 'Entrée Caisse'}</td>
+                  <td>{Number(stay.amount || 0).toLocaleString('fr-FR')} FG</td>
+                  <td>{Number(stay.balance || 0).toLocaleString('fr-FR')} FG</td>
+                  <td>{new Date(stay.startTime).toLocaleString()}</td>
+                  <td>{stay.endTime ? new Date(stay.endTime).toLocaleString() : 'En cours'}</td>
+                  <td>{stay.paymentMethod || '—'}</td>
+                  <td>
+                    <Button size="sm" variant="info" onClick={() => handleShowModal(stay)}>Voir</Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* 🔍 MODALE DÉTAIL */}

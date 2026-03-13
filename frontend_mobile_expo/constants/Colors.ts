@@ -4,13 +4,13 @@ export const Colors = {
     tabIconDefault: '#ccc',
     background: '#fff',
     text: '#000',
-    icon: '#333', // ✅ Ajouté pour résoudre l'erreur
+    icon: '#333', // Ajouté pour résoudre l'erreur
   },
   dark: {
     tint: '#fff',
     tabIconDefault: '#666',
     background: '#000',
     text: '#fff',
-    icon: '#ccc', // ✅ Ajouté aussi ici
+    icon: '#ccc', // Ajouté aussi ici
   },
 };

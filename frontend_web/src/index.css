@@ -1,3 +1,84 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.dashboard-toggle {
+	-webkit-tap-highlight-color: transparent;
+	user-select: none;
+	display: block;
+	border: none;
+	border-radius: 10px;
+	font-weight: 600;
+}
+
+.dashboard-toggle:focus,
+.dashboard-toggle:focus-visible {
+	outline: none;
+	box-shadow: none;
+}
+
+.dashboard-toggle::marker,
+.dashboard-toggle::-webkit-details-marker {
+	display: none;
+	content: "";
+}
+
+.filter-label {
+	cursor: default;
+	user-select: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.filter-label:focus,
+.filter-label:active {
+	outline: none;
+}
+
+.dashboard-page :where(
+	p,
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6,
+	span,
+	label,
+	small,
+	strong,
+	td,
+	th,
+	li,
+	div
+) {
+	cursor: default;
+}
+
+.dashboard-page :where(input, textarea, select) {
+	cursor: text;
+}
+
+.dashboard-page :where(button, summary, a, [role='button']) {
+	cursor: pointer;
+}
+
+.dashboard-page .kpi-card {
+	min-height: 128px;
+}
+
+@media (min-width: 992px) {
+	.dashboard-page .kpi-card {
+		min-height: auto;
+	}
+}
+
+/* Empêche le curseur de saisie d'apparaître sur du texte normal */
+body {
+	caret-color: transparent;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+	caret-color: auto;
+}

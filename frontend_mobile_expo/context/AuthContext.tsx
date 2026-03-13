@@ -4,6 +4,7 @@ import {jwtDecode} from 'jwt-decode'; // <-- correction ici
 import api from '../services/api';
 import NetInfo from '@react-native-community/netinfo';
 import { Alert } from 'react-native';
+import Constants from 'expo-constants';
 
 
 interface DecodedToken {
@@ -56,9 +57,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 const login = async (username: string, password: string): Promise<boolean> => {
   try {
-    console.log("[Auth] Tentative de login :", { username });
+    const normalizedUsername = username.trim();
+    console.log("[Auth] Tentative de login :", { username: normalizedUsername });
 
-    // ✅ 1. Vérifie la connexion Internet avant la requête
+    // 1. Vérifie la connexion Internet avant la requête
     const netInfo = await NetInfo.fetch();
     if (!netInfo.isConnected) {
       Alert.alert('Connexion requise', 'Aucune connexion Internet. Vérifiez votre réseau.');
@@ -66,11 +68,11 @@ const login = async (username: string, password: string): Promise<boolean> => {
       return false;
     }
 
-    // ✅ 2. Envoie la requête au serveur
-    const response = await api.post('/auth/login', { username, password });
+    // 2. Envoie la requête au serveur
+    const response = await api.post('/auth/login', { username: normalizedUsername, password });
     console.log("[Auth] Réponse serveur :", response.status, response.data);
 
-    // ✅ 3. Si tout est OK
+    // 3. Si tout est OK
     if (response.status === 200 && response.data.token) {
       const token = response.data.token;
       await AsyncStorage.setItem('token', token);
@@ -88,13 +90,18 @@ const login = async (username: string, password: string): Promise<boolean> => {
     return false;
 
   } catch (err: any) {
+    const netInfo = await NetInfo.fetch();
     console.error("[Auth] Erreur login :", {
       message: err.message,
       responseData: err.response?.data,
       responseStatus: err.response?.status,
+      requestUrl: `${err.config?.baseURL || ''}${err.config?.url || ''}`,
+      expoApiUrl: Constants.expoConfig?.extra?.apiUrl,
+      isConnected: netInfo.isConnected,
+      isInternetReachable: netInfo.isInternetReachable,
     });
 
-    // ✅ 4. Gestion intelligente des erreurs
+    // 4. Gestion intelligente des erreurs
     if (err.message === 'Network Error') {
       Alert.alert('Serveur injoignable', 'Impossible de contacter le serveur. Réessayez plus tard.');
     } else if (err.response?.status === 401) {

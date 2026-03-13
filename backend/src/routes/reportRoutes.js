@@ -1,8 +1,8 @@
-// backend/src/routes/reportRoutes.js
 const express = require('express');
 const router = express.Router();
 const reportController = require('../controllers/reportController');
 const { protect } = require('../middlewares/authMiddleware');
+// Suppression des routes Word
 
 // RAPPORTS
 router.get('/daily', protect, reportController.getDailyReport);

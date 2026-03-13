@@ -4,7 +4,7 @@ const roomSchema = new mongoose.Schema({
   number: { type: String, required: true, unique: true },
   state: { 
     type: String, 
-    enum: ['free', 'occupied', 'cleaning'], // ✅ cohérent avec ton front
+    enum: ['free', 'occupied', 'cleaning'], // cohérent avec ton front
     default: 'free' 
   }
 });

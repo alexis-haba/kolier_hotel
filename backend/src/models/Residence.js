@@ -24,7 +24,4 @@ const residenceSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-residenceSchema.index({ name: 1 });
-residenceSchema.index({ link: 1 });
-
 module.exports = mongoose.model('Residence', residenceSchema);

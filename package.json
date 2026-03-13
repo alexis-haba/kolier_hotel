@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "docx": "^9.6.0",
+    "react-multi-date-picker": "^4.5.2",
+    "react-scripts": "^5.0.1"
+  }
+}

@@ -13,6 +13,7 @@ const path = require('path');
 
 const connectDB = require('./config/db');
 const Tariff = require('./models/Tariff');
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,7 +21,7 @@ const PORT = process.env.PORT || 5000;
 /* ======================= 🔐 SECURITY & CORS ======================= */
 app.use(helmet());
 
-// ✅ CORS MOBILE + WEB
+// CORS MOBILE + WEB
 app.use(
   cors({
     origin: true, // accepte mobile, web, build
@@ -40,10 +41,17 @@ app.use(
 app.use(express.json());
 
 /* ======================= 🔗 DATABASE ======================= */
-connectDB();
+connectDB().then(() => {
+  // Init data après connexion
+  initializeDefaultTariff();
+}).catch(err => {
+  console.error('Impossible de se connecter à la base de données');
+  process.exit(1);
+});
 
-/* ======================= 🚀 ROUTES ======================= */
-app.use('/api/auth', require('./routes/authRoutes'));
+/* =======================  ROUTES ======================= */
+app.use('/api/auth', authRoutes);
+app.use('/', authRoutes);
 app.use('/api/rooms', require('./routes/roomRoutes'));
 app.use('/api/stays', require('./routes/stayRoutes'));
 app.use('/api/expenses', require('./routes/expenseRoutes'));
@@ -55,7 +63,7 @@ app.use('/api/entries', require('./routes/entryRoutes'));
 app.use('/api/user-report', require('./routes/userReportRoutes'));
 app.use('/api/residences', require('./routes/residenceRoutes'));
 
-// ✅ Route santé (test mobile)
+// Route santé (test mobile)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
@@ -66,7 +74,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 /* ======================= ▶️ START SERVER ======================= */
 app.listen(PORT, () => {
-  console.log(`🚀 Serveur lancé sur le port ${PORT}`);
+  console.log(` Serveur lancé sur le port ${PORT}`);
 });
 
 /* ======================= ⚙️ INIT DEFAULT DATA ======================= */
@@ -79,11 +87,9 @@ const initializeDefaultTariff = async () => {
         nightRate: 50,
         tva: 0,
       });
-      console.log('✅ Tarif par défaut initialisé.');
+      console.log('Tarif par défaut initialisé.');
     }
   } catch (err) {
-    console.error('❌ Erreur init tarif:', err);
+    console.error('Erreur init tarif:', err);
   }
 };
-
-initializeDefaultTariff();

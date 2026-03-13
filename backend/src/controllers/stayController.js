@@ -25,7 +25,7 @@ exports.addStay = async (req, res) => {
 
     const hours = Math.ceil((new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60));
 
-    // ✅ Nouveau : on garde toujours le montant manuel
+    // Nouveau : on garde toujours le montant manuel
     let amount = Number(sentAmount);
     if (isNaN(amount) || amount <= 0) {
       return res.status(400).json({ msg: "Montant invalide" });
