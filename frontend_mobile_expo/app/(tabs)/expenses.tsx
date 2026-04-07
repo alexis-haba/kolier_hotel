@@ -26,7 +26,10 @@ export default function Expenses() {
   const [items, setItems] = useState<Expense[]>([{ reason: "", amount: "" }]);
   const lastSaved = useRef<string>(""); // 🔹 garde en mémoire la dernière sauvegarde
 
-  const add = () => setItems((p) => [...p, { reason: "", amount: "" }]);
+  const add = () => {
+    console.log("Bouton 'Ajouter' cliqué");
+    setItems((p) => [...p, { reason: "", amount: "" }]);
+  };
   const rm = (i: number) => setItems((p) => p.filter((_, idx) => idx !== i));
   const setField = (i: number, k: keyof Expense, v: string) =>
     setItems((p) => p.map((e, idx) => (idx === i ? { ...e, [k]: v } : e)));
