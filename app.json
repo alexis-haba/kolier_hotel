@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "9bc593ad-498b-4f14-a0c4-23a2e1ada1a3"
+      }
+    },
+    "android": {
+      "package": "com.cah1.kolier_hotel"
+    }
+  }
+}

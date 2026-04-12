@@ -1,6 +1,7 @@
 // controllers/roomController.js
 const Room = require('../models/Room');
 const Stay = require('../models/Stay');
+const RoomHistory = require('../models/RoomHistory');
 
 // 📌 Récupérer toutes les chambres
 exports.getRooms = async (req, res) => {
@@ -49,6 +50,7 @@ exports.editRoom = async (req, res) => {
       }
     }
 
+    const roomBefore = await Room.findById(id);
     const updates = {};
     if (number) updates.number = number;
     if (type) updates.type = type;
@@ -56,6 +58,16 @@ exports.editRoom = async (req, res) => {
 
     const room = await Room.findByIdAndUpdate(id, updates, { new: true });
     if (!room) return res.status(404).json({ msg: 'Chambre non trouvée' });
+
+    // Historique si changement d'état
+    if (state && roomBefore && roomBefore.state !== state) {
+      await RoomHistory.create({
+        roomId: id,
+        oldState: roomBefore.state,
+        newState: state,
+        changedBy: req.user?._id // si tu utilises l'authentification
+      });
+    }
 
     res.json(room);
   } catch (err) {

@@ -53,6 +53,7 @@ connectDB().then(() => {
 app.use('/api/auth', authRoutes);
 app.use('/', authRoutes);
 app.use('/api/rooms', require('./routes/roomRoutes'));
+app.use('/api/room-history', require('./routes/roomHistoryRoutes'));
 app.use('/api/stays', require('./routes/stayRoutes'));
 app.use('/api/expenses', require('./routes/expenseRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));

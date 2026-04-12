@@ -6,7 +6,7 @@ dotenv.config({ path: envPath });
 export default {
   expo: {
     name: "The Vibes",
-    slug: "the vibes",
+    slug: "thevibesmobile",
     version: "1.0.0",
     orientation: "portrait",
     scheme: "the vibes",
