@@ -11,7 +11,7 @@ if (!resolvedApiUrl) {
 }
 
 const api = axios.create({
-  baseURL: resolvedApiUrl,
+  baseURL: `${resolvedApiUrl}/api`,
 });
 
 // Intercepteurs comme avant

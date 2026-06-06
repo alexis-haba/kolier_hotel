@@ -63,6 +63,8 @@ app.use('/api/tariffs', require('./routes/tariffRoutes'));
 app.use('/api/entries', require('./routes/entryRoutes'));
 app.use('/api/user-report', require('./routes/userReportRoutes'));
 app.use('/api/residences', require('./routes/residenceRoutes'));
+app.use('/api/module-entries', require('./routes/moduleEntryRoutes'));
+app.use('/api/settings', require('./routes/settingsRoutes'));
 
 // Route santé (test mobile)
 app.get('/api/health', (req, res) => {

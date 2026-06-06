@@ -34,6 +34,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [quickRange, setQuickRange] = useState('today');
+  const [moduleSettings, setModuleSettings] = useState({ restaurantEnabled: false, nightclubEnabled: false });
+  const [moduleEntries, setModuleEntries] = useState([]);
   const [showAllKpis, setShowAllKpis] = useState(false);
 
   const [monthlyWordMode, setMonthlyWordMode] = useState('details');
@@ -98,6 +100,20 @@ const Dashboard = () => {
   };
 
   // ================== API CALLS ==================
+  const fetchModuleData = useCallback(async () => {
+    try {
+      const [settingsRes, entriesRes] = await Promise.all([
+        api.get('/settings'),
+        api.get(`/module-entries?date=${filters.date}&limit=500`),
+      ]);
+      setModuleSettings({
+        restaurantEnabled: settingsRes.data.restaurantEnabled ?? false,
+        nightclubEnabled:  settingsRes.data.nightclubEnabled  ?? false,
+      });
+      setModuleEntries(entriesRes.data.entries ?? []);
+    } catch {}
+  }, [filters.date]);
+
   const fetchDailySummary = useCallback(async () => {
     try {
       setLoading(true);
@@ -193,7 +209,8 @@ const Dashboard = () => {
     fetchWeeklySummary();
     fetchMonthlySummary();
     fetchAnnualSummary();
-  }, [fetchDailySummary, fetchWeeklySummary, fetchMonthlySummary, fetchAnnualSummary]);
+    fetchModuleData();
+  }, [fetchDailySummary, fetchWeeklySummary, fetchMonthlySummary, fetchAnnualSummary, fetchModuleData]);
 
   // Nettoyage sécurité : déverrouillee le scroll si le composant est démonté
   useEffect(() => {
@@ -504,6 +521,106 @@ const Dashboard = () => {
             {showAllKpis ? 'Masquer des indicateurs' : 'Voir tous les indicateurs'}
           </button>
         </div>
+
+        {/* ================= Restaurant & Boîte de nuit ================= */}
+        {(moduleSettings.restaurantEnabled || moduleSettings.nightclubEnabled) && (() => {
+          const restEntries  = moduleEntries.filter(e => e.module === 'restaurant');
+          const nightEntries = moduleEntries.filter(e => e.module === 'nightclub');
+          const restIncome   = restEntries.filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0);
+          const restExpense  = restEntries.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0);
+          const nightIncome  = nightEntries.filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0);
+          const nightExpense = nightEntries.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0);
+
+          return (
+            <>
+              {/* KPI cards modules */}
+              <div className="row g-2 mb-3">
+                {moduleSettings.restaurantEnabled && <>
+                  <div className="col-6 col-lg-3">
+                    <div className="kpi-card p-2 text-white rounded shadow-sm d-flex flex-column h-100" style={{ background: '#10b981' }}>
+                      <div className="small">🍽️ Resto Entrées</div>
+                      <div className="fw-bold fs-6 mt-1">{restIncome.toLocaleString()} FG</div>
+                    </div>
+                  </div>
+                  <div className="col-6 col-lg-3">
+                    <div className="kpi-card p-2 text-white rounded shadow-sm bg-danger d-flex flex-column h-100">
+                      <div className="small">🍽️ Resto Dépenses</div>
+                      <div className="fw-bold fs-6 mt-1">{restExpense.toLocaleString()} FG</div>
+                    </div>
+                  </div>
+                </>}
+                {moduleSettings.nightclubEnabled && <>
+                  <div className="col-6 col-lg-3">
+                    <div className="kpi-card p-2 text-white rounded shadow-sm d-flex flex-column h-100" style={{ background: '#8b5cf6' }}>
+                      <div className="small">🎵 Boîte Entrées</div>
+                      <div className="fw-bold fs-6 mt-1">{nightIncome.toLocaleString()} FG</div>
+                    </div>
+                  </div>
+                  <div className="col-6 col-lg-3">
+                    <div className="kpi-card p-2 text-white rounded shadow-sm bg-danger d-flex flex-column h-100">
+                      <div className="small">🎵 Boîte Dépenses</div>
+                      <div className="fw-bold fs-6 mt-1">{nightExpense.toLocaleString()} FG</div>
+                    </div>
+                  </div>
+                </>}
+              </div>
+
+              {/* Détail restaurant */}
+              {moduleSettings.restaurantEnabled && restEntries.length > 0 && (
+                <details className="bg-white rounded shadow-sm border mb-3">
+                  <summary className="px-3 py-2 fw-semibold" style={{ cursor: 'pointer', background: '#d1fae5', color: '#065f46', borderRadius: 6 }}>
+                    🍽️ Détail Restaurant — {new Date(filters.date).toLocaleDateString('fr-FR')} ({restEntries.length} saisie{restEntries.length > 1 ? 's' : ''})
+                  </summary>
+                  <div className="p-2">
+                    <table className="table table-sm table-hover mb-0">
+                      <thead className="table-light">
+                        <tr><th>Description</th><th>Type</th><th className="text-end">Montant</th></tr>
+                      </thead>
+                      <tbody>
+                        {restEntries.map(e => (
+                          <tr key={e._id}>
+                            <td>{e.description}</td>
+                            <td><span className={`badge ${e.type === 'income' ? 'bg-success' : 'bg-danger'}`}>{e.type === 'income' ? 'Entrée' : 'Dépense'}</span></td>
+                            <td className="text-end fw-semibold" style={{ color: e.type === 'income' ? '#10b981' : '#ef4444' }}>
+                              {e.type === 'income' ? '+' : '-'}{e.amount.toLocaleString()} FG
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )}
+
+              {/* Détail boîte de nuit */}
+              {moduleSettings.nightclubEnabled && nightEntries.length > 0 && (
+                <details className="bg-white rounded shadow-sm border mb-3">
+                  <summary className="px-3 py-2 fw-semibold" style={{ cursor: 'pointer', background: '#ede9fe', color: '#4c1d95', borderRadius: 6 }}>
+                    🎵 Détail Boîte de nuit — {new Date(filters.date).toLocaleDateString('fr-FR')} ({nightEntries.length} saisie{nightEntries.length > 1 ? 's' : ''})
+                  </summary>
+                  <div className="p-2">
+                    <table className="table table-sm table-hover mb-0">
+                      <thead className="table-light">
+                        <tr><th>Description</th><th>Type</th><th className="text-end">Montant</th></tr>
+                      </thead>
+                      <tbody>
+                        {nightEntries.map(e => (
+                          <tr key={e._id}>
+                            <td>{e.description}</td>
+                            <td><span className={`badge ${e.type === 'income' ? 'bg-success' : 'bg-danger'}`}>{e.type === 'income' ? 'Entrée' : 'Dépense'}</span></td>
+                            <td className="text-end fw-semibold" style={{ color: e.type === 'income' ? '#8b5cf6' : '#ef4444' }}>
+                              {e.type === 'income' ? '+' : '-'}{e.amount.toLocaleString()} FG
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )}
+            </>
+          );
+        })()}
 
         <StayList filters={filters} setFilters={setFilters} />
         <ExpenseList filters={filters} />

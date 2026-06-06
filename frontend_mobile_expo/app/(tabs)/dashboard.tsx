@@ -7,8 +7,10 @@ import {
   RefreshControl,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "../../services/api";
 import eventBus from "../../utils/eventBus";
+import { useResidence } from "../../context/ResidenceContext";
 
 const COLORS = {
   bg: "#0B1220",
@@ -38,6 +40,11 @@ const safeFormat = (value: any) => {
 };
 
 export default function Dashboard() {
+  const { modules } = useResidence();
+  const [moduleStats, setModuleStats] = useState({
+    restaurantIncome: 0, restaurantExpense: 0,
+    nightclubIncome: 0,  nightclubExpense: 0,
+  });
   const [totals, setTotals] = useState({
     totalEntries: 0,
     totalExpenses: 0,
@@ -50,6 +57,28 @@ export default function Dashboard() {
   const [stays, setStays] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  const fetchModuleStats = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const { data } = await api.get(`/module-entries?date=${today}&limit=500`);
+      const entries = data.entries ?? [];
+
+      const sum = (mod: string, t: string) =>
+        entries
+          .filter((e: any) => e.module === mod && e.type === t)
+          .reduce((s: number, e: any) => s + e.amount, 0);
+
+      setModuleStats({
+        restaurantIncome:  sum('restaurant', 'income'),
+        restaurantExpense: sum('restaurant', 'expense'),
+        nightclubIncome:   sum('nightclub',  'income'),
+        nightclubExpense:  sum('nightclub',  'expense'),
+      });
+    } catch {
+      // silencieux
+    }
+  };
 
   const fetchDailyReport = async () => {
     try {
@@ -83,12 +112,13 @@ export default function Dashboard() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchDailyReport();
+    await Promise.all([fetchDailyReport(), fetchModuleStats()]);
     setRefreshing(false);
   };
 
   useEffect(() => {
     fetchDailyReport();
+    fetchModuleStats();
     eventBus.on("dataUpdated", fetchDailyReport);
     return () => {
       eventBus.off("dataUpdated", fetchDailyReport);
@@ -150,6 +180,46 @@ export default function Dashboard() {
       </View>
 
 
+
+      {/* Restaurant */}
+      {modules.restaurantEnabled && (
+        <View style={styles.card}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <MaterialCommunityIcons name="silverware-fork-knife" size={18} color={COLORS.primary} />
+            <Text style={[TYPO.h2, { marginLeft: 8 }]}>Restaurant (aujourd'hui)</Text>
+          </View>
+          <View style={styles.row}>
+            <View style={[styles.card, { marginBottom: 0 }]}>
+              <Text style={TYPO.p}>Entrées</Text>
+              <Text style={TYPO.moneyIn}>{safeFormat(moduleStats.restaurantIncome)} FG</Text>
+            </View>
+            <View style={[styles.card, { marginBottom: 0 }]}>
+              <Text style={TYPO.p}>Dépenses</Text>
+              <Text style={TYPO.moneyOut}>{safeFormat(moduleStats.restaurantExpense)} FG</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Boîte de nuit */}
+      {modules.nightclubEnabled && (
+        <View style={styles.card}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <MaterialCommunityIcons name="music" size={18} color="#8B5CF6" />
+            <Text style={[TYPO.h2, { marginLeft: 8 }]}>Boîte de nuit (aujourd'hui)</Text>
+          </View>
+          <View style={styles.row}>
+            <View style={[styles.card, { marginBottom: 0 }]}>
+              <Text style={TYPO.p}>Entrées</Text>
+              <Text style={[TYPO.moneyIn, { color: '#8B5CF6' }]}>{safeFormat(moduleStats.nightclubIncome)} FG</Text>
+            </View>
+            <View style={[styles.card, { marginBottom: 0 }]}>
+              <Text style={TYPO.p}>Dépenses</Text>
+              <Text style={TYPO.moneyOut}>{safeFormat(moduleStats.nightclubExpense)} FG</Text>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Liste des séjours */}
       <View style={styles.card}>

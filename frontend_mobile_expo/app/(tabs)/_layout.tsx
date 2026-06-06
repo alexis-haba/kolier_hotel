@@ -1,6 +1,7 @@
 import { Tabs, Redirect } from "expo-router";
 import React from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useResidence } from "../../context/ResidenceContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -16,7 +17,8 @@ const COLORS = {
 
 export default function TabsLayout() {
   const { isAuthenticated } = useAuth();
-  const insets = useSafeAreaInsets(); // récupère les marges safe area
+  const { modules } = useResidence();
+  const insets = useSafeAreaInsets();
 
   if (!isAuthenticated) return <Redirect href="/login" />;
 
@@ -31,8 +33,8 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: COLORS.card,
           borderTopColor: COLORS.border,
-          height: 60 + insets.bottom,     // adapte la hauteur
-          paddingBottom: insets.bottom,  // ajoute le bon espace
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom,
           paddingTop: 6,
         },
         sceneStyle: { backgroundColor: COLORS.bg },
@@ -77,6 +79,34 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="clipboard-text-clock" size={size} color={color} />,
           headerTitle: "Séjours (Nuit)",
         }}
+      />
+      <Tabs.Screen
+        name="restaurant"
+        options={
+          modules.restaurantEnabled
+            ? {
+                title: "Restaurant",
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="silverware-fork-knife" size={size} color={color} />
+                ),
+                headerTitle: "Restaurant",
+              }
+            : { href: null }
+        }
+      />
+      <Tabs.Screen
+        name="nightclub"
+        options={
+          modules.nightclubEnabled
+            ? {
+                title: "Boîte",
+                tabBarIcon: ({ color, size }) => (
+                  <MaterialCommunityIcons name="music" size={size} color={color} />
+                ),
+                headerTitle: "Boîte de nuit",
+              }
+            : { href: null }
+        }
       />
       <Tabs.Screen
         name="history"

@@ -2,24 +2,24 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
   {
-    username: { 
-      type: String, 
-      required: true, 
-      unique: true, 
-      trim: true,  // évite les espaces inutiles (ex: "alexis " ≠ "alexis")
-    },
-    password: { 
-      type: String, 
+    username: {
+      type: String,
       required: true,
-      select: false, // exclut automatiquement le mot de passe des résultats (plus sécurisé)
+      unique: true,
+      trim: true,
     },
-    role: { 
-      type: String, 
-      enum: ['admin', 'employee'], 
+    password: {
+      type: String,
+      required: true,
+      select: false,
+    },
+    role: {
+      type: String,
+      enum: ['admin', 'employee'],
       default: 'employee',
     },
   },
-  { timestamps: true } // ajoute createdAt et updatedAt
+  { timestamps: true }
 );
 
 module.exports = mongoose.model('User', userSchema);

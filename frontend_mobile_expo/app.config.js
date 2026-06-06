@@ -5,11 +5,11 @@ dotenv.config({ path: envPath });
 
 export default {
   expo: {
-    name: "The Vibes",
-    slug: "thevibesmobile",
+    name: "Andrick",
+    slug: "Andrick",
     version: "1.0.0",
     orientation: "portrait",
-    scheme: "the vibes",
+    scheme: "Andrick",
     icon: "./assets/images/icon.png",
     userInterfaceStyle: "light",
     splash: {
@@ -21,7 +21,7 @@ export default {
       supportsTablet: true,
     },
     android: {
-      package: "com.cah1.thevibes",   // 👈 obligatoire et unique
+      package: "com.cah123.thevibes",   // 👈 obligatoire et unique
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#FFFFFF",
@@ -30,8 +30,8 @@ export default {
     extra: {
       apiUrl: process.env.API_URL,
       eas: {
-        projectId: "a44993df-7ccf-4ce6-8a22-893d715767ca",
-      },
+        "projectId": "750f4bad-cbf0-44a6-84bc-3fbdeab04312"      },
     },
   },
 };
+  
